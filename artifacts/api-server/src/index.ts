@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { seed } from "./lib/seed";
+import { startScheduledRetrySweep } from "./lib/scheduledRetry";
 
 const rawPort = process.env["PORT"];
 
@@ -30,4 +31,6 @@ app.listen(port, async (err) => {
   } catch (seedErr) {
     logger.error({ err: seedErr }, "Failed to seed database");
   }
+
+  startScheduledRetrySweep();
 });
