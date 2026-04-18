@@ -111,12 +111,73 @@ interface TelegramUpdate {
   };
 }
 
-async function getBotConfig(): Promise<{ botToken: string | null; adminChatId: string | null }> {
+async function getBotConfig(): Promise<{ botToken: string | null; adminChatId: string | null; warrantyText: string | null; supportText: string | null; infoText: string | null }> {
   const { botConfigsTable } = await import("@workspace/db");
   const { desc } = await import("drizzle-orm");
   const [config] = await db.select().from(botConfigsTable).orderBy(desc(botConfigsTable.id)).limit(1);
-  return { botToken: config?.botToken ?? null, adminChatId: config?.adminChatId ?? null };
+  return {
+    botToken: config?.botToken ?? null,
+    adminChatId: config?.adminChatId ?? null,
+    warrantyText: config?.warrantyText ?? null,
+    supportText: config?.supportText ?? null,
+    infoText: config?.infoText ?? null,
+  };
 }
+
+// Default text shown when admin hasn't customized these sections yet.
+const DEFAULT_WARRANTY_TEXT =
+  "🛡️ <b>BẢO HÀNH</b>\n\n" +
+  "Nhập <b>mã giao dịch</b> của đơn bạn đã mua để được hỗ trợ.\n" +
+  "<i>Ví dụ:</i> <code>FT26044904376607</code>\n\n" +
+  "• Nếu cần huỷ: gõ <code>/cancel</code>";
+
+const DEFAULT_SUPPORT_TEXT =
+  "💬 <b>HỖ TRỢ KHÁCH HÀNG</b>\n\n" +
+  "📞 Liên hệ Admin: <i>(chưa cấu hình)</i>\n\n" +
+  "⏰ <b>Thời gian hỗ trợ:</b>\n8:00 - 23:00 hàng ngày\n\n" +
+  "📝 <b>Lưu ý:</b>\n" +
+  "• Gửi mã giao dịch khi cần hỗ trợ\n" +
+  "• Mô tả rõ vấn đề gặp phải\n" +
+  "• Chờ phản hồi trong 5-10 phút\n\n" +
+  "Cảm ơn bạn đã tin tưởng shop!";
+
+const DEFAULT_INFO_TEXT =
+  "ℹ️ <b>VỀ CỬA HÀNG</b>\n\n" +
+  "🤖 <b>Giới thiệu:</b>\n" +
+  "Bot bán hàng tự động hoạt động 24/7, giao hàng tức thì.\n\n" +
+  "✅ <b>Cam kết:</b>\n" +
+  "• Giao hàng tự động ngay lập tức\n" +
+  "• Sản phẩm chất lượng, giá tốt\n" +
+  "• Bảo hành theo từng sản phẩm\n" +
+  "• Hỗ trợ nhanh chóng\n\n" +
+  "💳 <b>Thanh toán:</b>\nChuyển khoản ngân hàng (QR)";
+
+// Persistent reply keyboard shown below the chat input. Built once per request
+// from the live config so any admin edits to the customizable info text take
+// effect immediately on the next interaction.
+function mainReplyKeyboard(): Record<string, unknown> {
+  return {
+    keyboard: [
+      [{ text: "🛒 Mua hàng" }, { text: "📋 Sản phẩm" }],
+      [{ text: "👤 Tài khoản" }, { text: "💰 Nạp ví" }],
+      [{ text: "🎟️ Voucher" }, { text: "🛡️ Bảo hành" }, { text: "💬 Hỗ trợ" }],
+      [{ text: "ℹ️ Thông tin" }],
+    ],
+    resize_keyboard: true,
+    is_persistent: true,
+  };
+}
+
+const REPLY_KEYBOARD_BUTTONS = new Set([
+  "🛒 Mua hàng",
+  "📋 Sản phẩm",
+  "👤 Tài khoản",
+  "💰 Nạp ví",
+  "🎟️ Voucher",
+  "🛡️ Bảo hành",
+  "💬 Hỗ trợ",
+  "ℹ️ Thông tin",
+]);
 
 async function getBotToken(): Promise<string | null> {
   const { botToken } = await getBotConfig();
@@ -302,6 +363,8 @@ async function upsertCustomer(from: { id: number; first_name?: string; last_name
 
 async function showMainMenu(chatId: number | string, customerName?: string, editMessageId?: number): Promise<void> {
   const name = customerName ?? "bạn";
+  // Render the inline menu (in place when navigating). The persistent reply
+  // keyboard is attached separately on /start so it survives across edits.
   await renderView(chatId, editMessageId, `👋 Chào mừng <b>${name}</b> đến với cửa hàng!\n\nChọn tùy chọn bên dưới:`, {
     reply_markup: {
       inline_keyboard: [
@@ -311,6 +374,82 @@ async function showMainMenu(chatId: number | string, customerName?: string, edit
       ],
     },
   });
+}
+
+// Show / refresh the persistent bottom reply keyboard. Telegram only renders a
+// reply keyboard when it's attached to a freshly sent message (it can't be
+// added via editMessage), so we send a tiny anchor message whenever we want to
+// guarantee the keyboard is visible — typically right after /start.
+async function showReplyKeyboard(chatId: number | string): Promise<void> {
+  await sendMessage(chatId, "⌨️ Menu nhanh đã sẵn sàng — bấm nút bên dưới bất cứ lúc nào.", {
+    reply_markup: mainReplyKeyboard(),
+  });
+}
+
+async function showAccountInfo(chatId: number | string, customer: typeof customersTable.$inferSelect): Promise<void> {
+  const { sql: drizzleSql } = await import("drizzle-orm");
+  const balance = parseFloat(customer.balance ?? "0");
+  const [orderStats] = await db.select({
+    totalOrders: drizzleSql<number>`COUNT(*)::int`,
+    totalSpent: drizzleSql<number>`COALESCE(SUM(CASE WHEN status IN ('paid','delivered') THEN total_amount::numeric ELSE 0 END), 0)::numeric`,
+  }).from(ordersTable).where(eq(ordersTable.customerId, customer.id));
+
+  const totalOrders = Number(orderStats?.totalOrders ?? 0);
+  const totalSpent = Number(orderStats?.totalSpent ?? 0);
+  const username = customer.username ? `@${customer.username}` : "(chưa có)";
+
+  const msg =
+    `👤 <b>TÀI KHOẢN CỦA BẠN</b>\n\n` +
+    `🆔 ID: <code>${customer.chatId}</code>\n` +
+    `📛 Tên: ${customer.firstName ?? "-"}${customer.lastName ? " " + customer.lastName : ""}\n` +
+    `💬 Username: ${username}\n\n` +
+    `💰 <b>Số dư ví:</b> ${balance.toLocaleString("vi-VN")}đ\n` +
+    `📦 <b>Tổng đơn hàng:</b> ${totalOrders}\n` +
+    `💳 <b>Tổng chi tiêu:</b> ${totalSpent.toLocaleString("vi-VN")}đ\n\n` +
+    `<i>Nạp ví:</i> <code>/naptien [số tiền]</code>\n` +
+    `<i>Lịch sử ví:</i> <code>/lichsu</code>`;
+  await sendMessage(chatId, msg);
+}
+
+async function showTopupInstructions(chatId: number | string): Promise<void> {
+  const msg =
+    `💰 <b>NẠP TIỀN VÀO VÍ</b>\n\n` +
+    `Sử dụng lệnh: <code>/naptien [số tiền]</code>\n` +
+    `Ví dụ: <code>/naptien 100000</code>\n\n` +
+    `Số tiền nạp tối thiểu: <b>10.000đ</b>\n` +
+    `Bot sẽ gửi mã QR để bạn quét và chuyển khoản.`;
+  await sendMessage(chatId, msg);
+}
+
+async function showActivePromotions(chatId: number | string): Promise<void> {
+  // Show promotions that are currently active and not expired.
+  const now = new Date();
+  const promos = await db.select().from(promotionsTable)
+    .where(and(eq(promotionsTable.isActive, true)))
+    .orderBy(desc(promotionsTable.priority));
+  const visible = promos.filter(p => {
+    if (p.startDate && new Date(p.startDate) > now) return false;
+    if (p.endDate && new Date(p.endDate) < now) return false;
+    return true;
+  }).slice(0, 10);
+
+  if (visible.length === 0) {
+    await sendMessage(chatId, "🎟️ <b>VOUCHER HIỆN CÓ</b>\n\n<i>Hiện chưa có mã giảm giá nào đang hoạt động.</i>");
+    return;
+  }
+  let msg = "🎟️ <b>VOUCHER HIỆN CÓ</b>\n\n";
+  for (const p of visible) {
+    const code = (p as unknown as { code?: string }).code;
+    const value = (p as unknown as { discountValue?: string }).discountValue;
+    const discountText = p.type === "percentage" ? `${value}%` : `${parseFloat(value ?? "0").toLocaleString("vi-VN")}đ`;
+    if (code) {
+      msg += `• <code>${code}</code> — ${p.name} (giảm ${discountText})\n`;
+    } else {
+      msg += `• ${p.name} (giảm ${discountText})\n`;
+    }
+  }
+  msg += `\n<i>Nhập mã khi đặt hàng để áp dụng.</i>`;
+  await sendMessage(chatId, msg);
 }
 
 async function showCategories(chatId: number | string, editMessageId?: number): Promise<void> {
@@ -909,7 +1048,33 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         clearAwaitingPromo(chatId);
         clearAwaitingQuantity(chatId);
         await logBotAction("start", String(chatId), customer.id, "/start command");
+        // Anchor message that installs the persistent reply keyboard, then the
+        // inline main menu on top of it.
+        await showReplyKeyboard(chatId);
         await showMainMenu(chatId, from.first_name);
+      } else if (REPLY_KEYBOARD_BUTTONS.has(text.trim())) {
+        // A tap on the persistent reply keyboard. Always cancel any pending
+        // quantity / promo prompt — the user is starting a new flow.
+        clearAwaitingPromo(chatId);
+        clearAwaitingQuantity(chatId);
+        const btn = text.trim();
+        await logBotAction("reply_keyboard", String(chatId), customer.id, btn);
+        const cfg = await getBotConfig();
+        if (btn === "🛒 Mua hàng" || btn === "📋 Sản phẩm") {
+          await showCategories(chatId);
+        } else if (btn === "👤 Tài khoản") {
+          await showAccountInfo(chatId, customer);
+        } else if (btn === "💰 Nạp ví") {
+          await showTopupInstructions(chatId);
+        } else if (btn === "🎟️ Voucher") {
+          await showActivePromotions(chatId);
+        } else if (btn === "🛡️ Bảo hành") {
+          await sendMessage(chatId, cfg.warrantyText && cfg.warrantyText.trim().length > 0 ? cfg.warrantyText : DEFAULT_WARRANTY_TEXT);
+        } else if (btn === "💬 Hỗ trợ") {
+          await sendMessage(chatId, cfg.supportText && cfg.supportText.trim().length > 0 ? cfg.supportText : DEFAULT_SUPPORT_TEXT);
+        } else if (btn === "ℹ️ Thông tin") {
+          await sendMessage(chatId, cfg.infoText && cfg.infoText.trim().length > 0 ? cfg.infoText : DEFAULT_INFO_TEXT);
+        }
       } else if (text.startsWith("/naptien")) {
         clearAwaitingPromo(chatId);
         clearAwaitingQuantity(chatId);

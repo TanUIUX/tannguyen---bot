@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Bot, Unplug, Plug, Activity, Eye, EyeOff, Play, Square } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, Bot, Unplug, Plug, Activity, Eye, EyeOff, Play, Square, Keyboard } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -22,6 +23,14 @@ const botSchema = z.object({
 });
 
 type BotFormValues = z.infer<typeof botSchema>;
+
+const menuTextsSchema = z.object({
+  warrantyText: z.string().max(4000, "Tối đa 4000 ký tự").optional(),
+  supportText: z.string().max(4000, "Tối đa 4000 ký tự").optional(),
+  infoText: z.string().max(4000, "Tối đa 4000 ký tự").optional(),
+});
+
+type MenuTextsValues = z.infer<typeof menuTextsSchema>;
 
 export default function SettingsBot() {
   const queryClient = useQueryClient();
@@ -45,14 +54,28 @@ export default function SettingsBot() {
     },
   });
 
+  const menuTextsForm = useForm<MenuTextsValues>({
+    resolver: zodResolver(menuTextsSchema),
+    defaultValues: {
+      warrantyText: "",
+      supportText: "",
+      infoText: "",
+    },
+  });
+
   useEffect(() => {
     if (config) {
       form.reset({
         botToken: config.botToken || "",
         adminChatId: config.adminChatId || "",
       });
+      menuTextsForm.reset({
+        warrantyText: config.warrantyText || "",
+        supportText: config.supportText || "",
+        infoText: config.infoText || "",
+      });
     }
-  }, [config, form]);
+  }, [config, form, menuTextsForm]);
 
   const onSubmit = (data: BotFormValues) => {
     saveConfig.mutate(
@@ -63,6 +86,27 @@ export default function SettingsBot() {
           queryClient.invalidateQueries({ queryKey: getGetBotConfigQueryKey() });
         },
       }
+    );
+  };
+
+  const onSaveMenuTexts = (data: MenuTextsValues) => {
+    // Send the existing (masked) bot token back unchanged — the API treats a
+    // masked token as "no change" and only updates the menu text fields.
+    saveConfig.mutate(
+      {
+        data: {
+          botToken: config?.botToken || "",
+          warrantyText: data.warrantyText ?? "",
+          supportText: data.supportText ?? "",
+          infoText: data.infoText ?? "",
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Đã lưu nội dung menu" });
+          queryClient.invalidateQueries({ queryKey: getGetBotConfigQueryKey() });
+        },
+      },
     );
   };
 
@@ -288,6 +332,86 @@ export default function SettingsBot() {
           </CardFooter>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Keyboard className="h-5 w-5 text-primary" />
+            Nội dung menu nhanh
+          </CardTitle>
+          <CardDescription>
+            Tuỳ chỉnh nội dung hiển thị khi khách hàng bấm các nút <b>Bảo hành</b>, <b>Hỗ trợ</b>, <b>Thông tin</b> trên menu nhanh phía dưới chat. Hỗ trợ định dạng HTML cơ bản: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;code&gt;</code>. Để trống để dùng mặc định.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...menuTextsForm}>
+            <form onSubmit={menuTextsForm.handleSubmit(onSaveMenuTexts)} className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <FormField
+                  control={menuTextsForm.control}
+                  name="warrantyText"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>🛡️ Bảo hành</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          rows={10}
+                          placeholder="Nhập nội dung sẽ hiển thị khi khách bấm nút Bảo hành…"
+                          data-testid="textarea-warranty-text"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={menuTextsForm.control}
+                  name="supportText"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>💬 Hỗ trợ</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          rows={10}
+                          placeholder="Nhập nội dung sẽ hiển thị khi khách bấm nút Hỗ trợ…"
+                          data-testid="textarea-support-text"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={menuTextsForm.control}
+                  name="infoText"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ℹ️ Thông tin</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          rows={10}
+                          placeholder="Nhập nội dung sẽ hiển thị khi khách bấm nút Thông tin…"
+                          data-testid="textarea-info-text"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={saveConfig.isPending} data-testid="btn-save-menu-texts">
+                  {saveConfig.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Lưu nội dung menu
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

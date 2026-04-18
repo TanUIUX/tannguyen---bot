@@ -402,12 +402,18 @@ export interface BotConfig {
   isConnected: boolean;
   webhookStatus?: string | null;
   adminChatId?: string | null;
+  warrantyText?: string | null;
+  supportText?: string | null;
+  infoText?: string | null;
   updatedAt?: string | null;
 }
 
 export interface SaveBotConfigRequest {
   botToken: string;
   adminChatId?: string | null;
+  warrantyText?: string | null;
+  supportText?: string | null;
+  infoText?: string | null;
 }
 
 export interface TestTokenRequest {

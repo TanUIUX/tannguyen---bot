@@ -39,12 +39,15 @@ router.get("/bot/config", requireAuth, async (_req, res): Promise<void> => {
     isConnected: config.isConnected,
     webhookStatus: config.webhookStatus,
     adminChatId: config.adminChatId,
+    warrantyText: config.warrantyText,
+    supportText: config.supportText,
+    infoText: config.infoText,
     updatedAt: config.updatedAt,
   });
 });
 
 router.post("/bot/config", requireAuth, validateBody(SaveBotConfigBody), async (req, res): Promise<void> => {
-  const { botToken, adminChatId } = req.body as z.infer<typeof SaveBotConfigBody>;
+  const { botToken, adminChatId, warrantyText, supportText, infoText } = req.body as z.infer<typeof SaveBotConfigBody>;
 
   const existing = await getConfig();
   let config;
@@ -65,6 +68,9 @@ router.post("/bot/config", requireAuth, validateBody(SaveBotConfigBody), async (
       updateData.webhookSecretToken = null;
     }
     if (adminChatId !== undefined) updateData.adminChatId = adminChatId;
+    if (warrantyText !== undefined) updateData.warrantyText = warrantyText;
+    if (supportText !== undefined) updateData.supportText = supportText;
+    if (infoText !== undefined) updateData.infoText = infoText;
 
     if (Object.keys(updateData).length === 0) {
       // Nothing to change — return existing config without a DB write

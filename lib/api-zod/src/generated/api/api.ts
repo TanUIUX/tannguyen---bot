@@ -900,6 +900,9 @@ export const GetBotConfigResponse = zod.object({
   isConnected: zod.boolean(),
   webhookStatus: zod.string().nullish(),
   adminChatId: zod.string().nullish(),
+  warrantyText: zod.string().nullish(),
+  supportText: zod.string().nullish(),
+  infoText: zod.string().nullish(),
   updatedAt: zod.coerce.date().nullish(),
 });
 
@@ -909,6 +912,9 @@ export const GetBotConfigResponse = zod.object({
 export const SaveBotConfigBody = zod.object({
   botToken: zod.string(),
   adminChatId: zod.string().nullish(),
+  warrantyText: zod.string().nullish(),
+  supportText: zod.string().nullish(),
+  infoText: zod.string().nullish(),
 });
 
 export const SaveBotConfigResponse = zod.object({
@@ -919,6 +925,9 @@ export const SaveBotConfigResponse = zod.object({
   isConnected: zod.boolean(),
   webhookStatus: zod.string().nullish(),
   adminChatId: zod.string().nullish(),
+  warrantyText: zod.string().nullish(),
+  supportText: zod.string().nullish(),
+  infoText: zod.string().nullish(),
   updatedAt: zod.coerce.date().nullish(),
 });
 

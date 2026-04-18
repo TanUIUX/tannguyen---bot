@@ -2061,6 +2061,15 @@ components:
         adminChatId:
           type: string
           nullable: true
+        warrantyText:
+          type: string
+          nullable: true
+        supportText:
+          type: string
+          nullable: true
+        infoText:
+          type: string
+          nullable: true
         updatedAt:
           type: string
           format: date-time
@@ -2074,6 +2083,15 @@ components:
         botToken:
           type: string
         adminChatId:
+          type: string
+          nullable: true
+        warrantyText:
+          type: string
+          nullable: true
+        supportText:
+          type: string
+          nullable: true
+        infoText:
           type: string
           nullable: true
       required:

@@ -11,6 +11,9 @@ export const botConfigsTable = pgTable("bot_configs", {
   isConnected: boolean("is_connected").notNull().default(false),
   webhookStatus: text("webhook_status").default("not_set"),
   adminChatId: text("admin_chat_id"),
+  warrantyText: text("warranty_text"),
+  supportText: text("support_text"),
+  infoText: text("info_text"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
