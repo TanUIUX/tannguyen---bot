@@ -329,7 +329,11 @@ export interface Promotion {
   id: number;
   name: string;
   description?: string | null;
+  code?: string | null;
   type: string;
+  discountValue?: string | null;
+  usageLimit?: number | null;
+  useCount: number;
   appliesTo: string;
   categoryId?: number | null;
   productId?: number | null;
@@ -353,7 +357,10 @@ export type CreatePromotionRequestTiers = { [key: string]: unknown };
 export interface CreatePromotionRequest {
   name: string;
   description?: string;
+  code?: string;
   type: string;
+  discountValue?: string;
+  usageLimit?: number;
   appliesTo?: string;
   categoryId?: number;
   productId?: number;
@@ -371,7 +378,10 @@ export type UpdatePromotionRequestTiers = { [key: string]: unknown };
 export interface UpdatePromotionRequest {
   name?: string;
   description?: string;
+  code?: string;
   type?: string;
+  discountValue?: string;
+  usageLimit?: number;
   appliesTo?: string;
   categoryId?: number;
   productId?: number;

@@ -1891,8 +1891,19 @@ components:
         description:
           type: string
           nullable: true
+        code:
+          type: string
+          nullable: true
         type:
           type: string
+        discountValue:
+          type: string
+          nullable: true
+        usageLimit:
+          type: integer
+          nullable: true
+        useCount:
+          type: integer
         appliesTo:
           type: string
         categoryId:
@@ -1932,6 +1943,7 @@ components:
         - type
         - appliesTo
         - customerTarget
+        - useCount
         - priority
         - isActive
         - createdAt
@@ -1954,8 +1966,14 @@ components:
           type: string
         description:
           type: string
+        code:
+          type: string
         type:
           type: string
+        discountValue:
+          type: string
+        usageLimit:
+          type: integer
         appliesTo:
           type: string
         categoryId:
@@ -1989,8 +2007,14 @@ components:
           type: string
         description:
           type: string
+        code:
+          type: string
         type:
           type: string
+        discountValue:
+          type: string
+        usageLimit:
+          type: integer
         appliesTo:
           type: string
         categoryId:

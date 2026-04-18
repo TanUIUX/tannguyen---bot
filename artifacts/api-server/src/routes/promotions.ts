@@ -20,11 +20,15 @@ router.get("/promotions", requireAuth, async (_req, res): Promise<void> => {
 });
 
 router.post("/promotions", requireAuth, validateBody(CreatePromotionBody), async (req, res): Promise<void> => {
-  const { name, description, type, appliesTo, categoryId, productId, customerTarget, customerId, tiers, startDate, endDate, priority, isActive } = req.body as z.infer<typeof CreatePromotionBody>;
+  const { name, description, code, type, discountValue, usageLimit, appliesTo, categoryId, productId, customerTarget, customerId, tiers, startDate, endDate, priority, isActive } = req.body as z.infer<typeof CreatePromotionBody>;
+  const normalizedCode = code?.trim() ? code.trim().toUpperCase() : undefined;
   const [promotion] = await db.insert(promotionsTable).values({
     name,
     description,
+    code: normalizedCode,
     type,
+    discountValue: discountValue ?? undefined,
+    usageLimit: usageLimit ?? undefined,
     appliesTo: appliesTo ?? "all",
     categoryId,
     productId,
@@ -51,12 +55,15 @@ router.get("/promotions/:id", requireAuth, validateParams(GetPromotionParams), a
 
 router.patch("/promotions/:id", requireAuth, validateParams(UpdatePromotionParams), validateBody(UpdatePromotionBody), async (req, res): Promise<void> => {
   const { id } = req.params as unknown as z.infer<typeof UpdatePromotionParams>;
-  const { name, description, type, appliesTo, categoryId, productId, customerTarget, customerId, tiers, startDate, endDate, priority, isActive } = req.body as z.infer<typeof UpdatePromotionBody>;
+  const { name, description, code, type, discountValue, usageLimit, appliesTo, categoryId, productId, customerTarget, customerId, tiers, startDate, endDate, priority, isActive } = req.body as z.infer<typeof UpdatePromotionBody>;
 
   const updateData: Record<string, unknown> = {};
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
+  if (code !== undefined) updateData.code = code.trim() ? code.trim().toUpperCase() : null;
   if (type !== undefined) updateData.type = type;
+  if (discountValue !== undefined) updateData.discountValue = discountValue;
+  if (usageLimit !== undefined) updateData.usageLimit = usageLimit;
   if (appliesTo !== undefined) updateData.appliesTo = appliesTo;
   if (categoryId !== undefined) updateData.categoryId = categoryId;
   if (productId !== undefined) updateData.productId = productId;

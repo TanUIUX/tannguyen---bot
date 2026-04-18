@@ -8,6 +8,8 @@ export const ordersTable = pgTable("orders", {
   orderCode: text("order_code").notNull().unique(),
   customerId: integer("customer_id").notNull().references(() => customersTable.id),
   totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
+  promotionId: integer("promotion_id"),
+  discountAmount: numeric("discount_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   status: text("status").notNull().default("pending"),
   paymentReference: text("payment_reference"),
   paidAt: timestamp("paid_at", { withTimezone: true }),

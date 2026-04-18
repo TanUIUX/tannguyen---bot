@@ -38,7 +38,10 @@ const getTiersPlaceholder = (type: string) => {
 const promotionSchema = z.object({
   name: z.string().min(1, "Tên khuyến mãi là bắt buộc"),
   description: z.string().optional(),
+  code: z.string().optional(),
   type: z.string().default("percentage"),
+  discountValue: z.string().optional(),
+  usageLimit: z.string().optional(),
   appliesTo: z.string().default("all"),
   customerTarget: z.string().default("all"),
   priority: z.string().default("0"),
@@ -69,7 +72,10 @@ export default function Promotions() {
     defaultValues: {
       name: "",
       description: "",
+      code: "",
       type: "percentage",
+      discountValue: "",
+      usageLimit: "",
       appliesTo: "all",
       customerTarget: "all",
       priority: "0",
@@ -97,7 +103,10 @@ export default function Promotions() {
     const payload = {
       name: data.name,
       description: data.description || undefined,
+      code: data.code?.trim() ? data.code.trim().toUpperCase() : undefined,
       type: data.type,
+      discountValue: data.discountValue?.trim() ? data.discountValue.trim() : undefined,
+      usageLimit: data.usageLimit?.trim() ? parseInt(data.usageLimit, 10) : undefined,
       appliesTo: data.appliesTo,
       customerTarget: data.customerTarget,
       priority: parseInt(data.priority) || 0,
@@ -139,7 +148,10 @@ export default function Promotions() {
     form.reset({
       name: promo.name,
       description: promo.description || "",
+      code: promo.code ?? "",
       type: promo.type,
+      discountValue: promo.discountValue ?? "",
+      usageLimit: promo.usageLimit != null ? String(promo.usageLimit) : "",
       appliesTo: promo.appliesTo,
       customerTarget: promo.customerTarget,
       priority: String(promo.priority ?? 0),
@@ -210,6 +222,53 @@ export default function Promotions() {
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={form.control}
+                  name="code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Mã giảm giá</FormLabel>
+                      <FormControl>
+                        <Input placeholder="VD: SUMMER10 (để trống nếu không dùng)" {...field} data-testid="input-promo-code" />
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        Mã khách nhập tại bot Telegram khi đặt hàng. Tự động chuyển sang chữ HOA.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="discountValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Giá trị giảm</FormLabel>
+                        <FormControl>
+                          <Input placeholder="VD: 10 (% hoặc VND)" {...field} data-testid="input-promo-discount" />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          % cho loại percentage, VND cho fixed
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="usageLimit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Giới hạn lượt dùng</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" placeholder="Trống = không giới hạn" {...field} data-testid="input-promo-usage-limit" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <FormField
                   control={form.control}
                   name="type"
@@ -377,7 +436,9 @@ export default function Promotions() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Tên KM</TableHead>
+                  <TableHead>Mã</TableHead>
                   <TableHead>Loại</TableHead>
+                  <TableHead>Lượt dùng</TableHead>
                   <TableHead>Phạm vi</TableHead>
                   <TableHead>Đối tượng</TableHead>
                   <TableHead>Bậc</TableHead>
@@ -396,7 +457,14 @@ export default function Promotions() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
+                      {promo.code ? <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{promo.code}</code> : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-sm">
                       {PROMOTION_TYPES.find(t => t.value === promo.type)?.label?.split(" (")[0] ?? promo.type}
+                      {promo.discountValue && <div className="text-xs text-muted-foreground">{promo.discountValue}{promo.type === 'percentage' ? '%' : 'đ'}</div>}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {promo.useCount}{promo.usageLimit != null ? ` / ${promo.usageLimit}` : ''}
                     </TableCell>
                     <TableCell className="text-sm">{promo.appliesTo === 'all' ? 'Tất cả' : promo.appliesTo}</TableCell>
                     <TableCell className="text-sm">{
@@ -426,7 +494,7 @@ export default function Promotions() {
                 ))}
                 {promotionList?.data?.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                       Không có khuyến mãi nào.
                     </TableCell>
                   </TableRow>
