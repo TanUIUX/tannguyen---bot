@@ -1,8 +1,10 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, and, sql, count } from "drizzle-orm";
-import { db, productsTable, productStocksTable, categoriesTable } from "@workspace/db";
+import { db, productsTable, productStocksTable, categoriesTable, ordersTable, orderItemsTable, botLogsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { validateBody, validateParams, validateQuery } from "../middlewares/validate";
+import { deliverOrder } from "../lib/bot";
+import { logger } from "../lib/logger";
 import {
   ListProductsQueryParams,
   CreateProductBody,
@@ -151,6 +153,45 @@ router.get("/products/:id/stocks", requireAuth, validateParams(ListProductStocks
   res.json({ data, availableCount: availableCount?.count ?? 0, totalCount: data.length });
 });
 
+async function retryStuckOrdersForProduct(productId: number): Promise<void> {
+  try {
+    const stuckOrders = await db
+      .selectDistinct({ orderId: ordersTable.id, orderCode: ordersTable.orderCode })
+      .from(ordersTable)
+      .innerJoin(orderItemsTable, eq(orderItemsTable.orderId, ordersTable.id))
+      .where(and(eq(ordersTable.status, "needs_manual_action"), eq(orderItemsTable.productId, productId)));
+
+    if (stuckOrders.length === 0) return;
+
+    await db.insert(botLogsTable).values({
+      action: "restock_retry_triggered",
+      content: `Restock for product ${productId} triggered retry for ${stuckOrders.length} stuck order(s)`,
+      metadata: { productId, orderIds: stuckOrders.map(o => o.orderId) },
+      level: "info",
+    });
+
+    for (const { orderId, orderCode } of stuckOrders) {
+      const [updated] = await db
+        .update(ordersTable)
+        .set({ status: "paid" })
+        .where(and(eq(ordersTable.id, orderId), eq(ordersTable.status, "needs_manual_action")))
+        .returning({ id: ordersTable.id });
+
+      if (!updated) continue;
+
+      const success = await deliverOrder(orderId);
+      await db.insert(botLogsTable).values({
+        action: success ? "restock_retry_delivered" : "restock_retry_failed",
+        content: `Restock retry for order ${orderCode} (id=${orderId}): ${success ? "delivered" : "failed"}`,
+        metadata: { productId, orderId },
+        level: success ? "info" : "error",
+      });
+    }
+  } catch (err) {
+    logger.error({ err }, "Error retrying stuck orders after restock");
+  }
+}
+
 router.post("/products/:id/stocks", requireAuth, validateParams(AddProductStocksParams), validateBody(AddProductStocksBody), async (req, res): Promise<void> => {
   const { id: productId } = req.params as unknown as z.infer<typeof AddProductStocksParams>;
   const { lines } = req.body as z.infer<typeof AddProductStocksBody>;
@@ -161,6 +202,7 @@ router.post("/products/:id/stocks", requireAuth, validateParams(AddProductStocks
   }
   await db.insert(productStocksTable).values(validLines.map((content: string) => ({ productId, content, status: "available" })));
   res.status(201).json({ added: validLines.length, message: `Added ${validLines.length} stock lines` });
+  retryStuckOrdersForProduct(productId).catch(err => logger.error({ err }, "retryStuckOrdersForProduct failed"));
 });
 
 router.delete("/stocks/:id", requireAuth, validateParams(DeleteStockParams), async (req, res): Promise<void> => {
