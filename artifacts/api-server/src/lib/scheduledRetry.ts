@@ -259,6 +259,11 @@ export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
 }
 
 export function startScheduledRetrySweep(): void {
+  if (_sweepIntervalMinutes < 5) {
+    logger.warn({ intervalMinutes: _sweepIntervalMinutes }, "Retry sweep interval is very short");
+  } else if (_sweepIntervalMinutes > 1440) {
+    logger.warn({ intervalMinutes: _sweepIntervalMinutes }, "Retry sweep interval is very long");
+  }
   logger.info({ intervalMinutes: _sweepIntervalMinutes, intervalMs: RETRY_INTERVAL_MS }, "Starting scheduled retry sweep (retry limits read from system_settings on each sweep)");
   setInterval(() => {
     runStuckOrderRetrySweep().catch(err => {
