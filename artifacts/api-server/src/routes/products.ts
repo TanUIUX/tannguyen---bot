@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, and, sql, count, or } from "drizzle-orm";
+import { eq, ilike, and, sql, count, or, lt } from "drizzle-orm";
 import { db, productsTable, productStocksTable, categoriesTable, ordersTable, orderItemsTable, botLogsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { validateBody, validateParams, validateQuery } from "../middlewares/validate";
@@ -153,9 +153,14 @@ router.get("/products/:id/stocks", requireAuth, validateParams(ListProductStocks
   res.json({ data, availableCount: availableCount?.count ?? 0, totalCount: data.length });
 });
 
+const RESTOCK_MAX_RETRY_COUNT = 10;
+const RESTOCK_MAX_ORDER_AGE_DAYS = 7;
+
 async function retryStuckOrdersForProduct(productId: number): Promise<void> {
   try {
     const stuckStatuses = ["needs_manual_action", "confirmed_not_delivered"];
+    const ageThreshold = new Date(Date.now() - RESTOCK_MAX_ORDER_AGE_DAYS * 24 * 60 * 60 * 1000);
+
     const stuckOrders = await db
       .selectDistinct({ orderId: ordersTable.id, orderCode: ordersTable.orderCode, status: ordersTable.status })
       .from(ordersTable)
@@ -163,7 +168,9 @@ async function retryStuckOrdersForProduct(productId: number): Promise<void> {
       .where(
         and(
           or(...stuckStatuses.map(s => eq(ordersTable.status, s))),
-          eq(orderItemsTable.productId, productId)
+          eq(orderItemsTable.productId, productId),
+          sql`${ordersTable.retryCount} < ${RESTOCK_MAX_RETRY_COUNT}`,
+          sql`${ordersTable.createdAt} >= ${ageThreshold.toISOString()}`
         )
       );
 

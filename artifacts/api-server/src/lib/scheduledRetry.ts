@@ -183,9 +183,6 @@ export async function runStuckOrderRetrySweep(): Promise<void> {
       `⚠️ Lỗi ngoại lệ: <b>${errored}</b>`,
     ];
 
-    if (toExhaust.length > 0) {
-      summaryLines.push(``, `🚫 Hết lượt thử: <b>${toExhaust.length}</b> (${toExhaust.map(o => `<code>${o.orderCode}</code>`).join(", ")})`);
-    }
     if (deliveredCodes.length > 0) {
       summaryLines.push(``, `Đơn giao được: ${deliveredCodes.map(c => `<code>${c}</code>`).join(", ")}`);
     }
