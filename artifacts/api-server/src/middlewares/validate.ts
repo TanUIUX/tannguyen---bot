@@ -5,6 +5,11 @@ function formatZodError(err: z.ZodError): string {
   return err.issues.map((i: z.ZodIssue) => `${i.path.join(".")}: ${i.message}`).join("; ");
 }
 
+/**
+ * Validates `req.body` against the provided Zod schema.
+ * Replaces req.body with the parsed/coerced result on success.
+ * Returns HTTP 400 with field-level detail on failure.
+ */
 export function validateBody<T extends z.ZodTypeAny>(schema: T) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.body);
@@ -17,6 +22,11 @@ export function validateBody<T extends z.ZodTypeAny>(schema: T) {
   };
 }
 
+/**
+ * Validates `req.params` against the provided Zod schema.
+ * Mutates params in-place with coerced values on success.
+ * Returns HTTP 400 with field-level detail on failure.
+ */
 export function validateParams<T extends z.ZodTypeAny>(schema: T) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.params);
@@ -29,6 +39,13 @@ export function validateParams<T extends z.ZodTypeAny>(schema: T) {
   };
 }
 
+/**
+ * Validates `req.query` against the provided Zod schema.
+ * Stores the coerced result in `res.locals.query` (because Express 5 exposes
+ * `req.query` as a read-only getter — direct assignment is not possible).
+ * Route handlers must read from `res.locals.query` to access coerced values.
+ * Returns HTTP 400 with field-level detail on failure.
+ */
 export function validateQuery<T extends z.ZodTypeAny>(schema: T) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.query);
@@ -36,7 +53,8 @@ export function validateQuery<T extends z.ZodTypeAny>(schema: T) {
       res.status(400).json({ error: "Invalid query parameters", details: formatZodError(result.error) });
       return;
     }
-    req.query = result.data as Record<string, string>;
+    // Store coerced query in res.locals since req.query is a getter in Express 5
+    res.locals["query"] = result.data;
     next();
   };
 }

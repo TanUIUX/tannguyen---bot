@@ -21,7 +21,7 @@ import type z from "zod";
 const router: IRouter = Router();
 
 router.get("/products", requireAuth, validateQuery(ListProductsQueryParams), async (req, res): Promise<void> => {
-  const { page, limit, search, categoryId, isActive } = req.query as unknown as z.infer<typeof ListProductsQueryParams>;
+  const { page, limit, search, categoryId, isActive } = res.locals["query"] as z.infer<typeof ListProductsQueryParams>;
   const offset = (page - 1) * limit;
 
   const conditions = [];
@@ -138,10 +138,9 @@ router.delete("/products/:id", requireAuth, validateParams(DeleteProductParams),
   res.sendStatus(204);
 });
 
-// Stock routes
 router.get("/products/:id/stocks", requireAuth, validateParams(ListProductStocksParams), validateQuery(ListProductStocksQueryParams), async (req, res): Promise<void> => {
   const { id: productId } = req.params as unknown as z.infer<typeof ListProductStocksParams>;
-  const { status } = req.query as unknown as z.infer<typeof ListProductStocksQueryParams>;
+  const { status } = res.locals["query"] as z.infer<typeof ListProductStocksQueryParams>;
 
   const conditions = [eq(productStocksTable.productId, productId)];
   if (status) conditions.push(eq(productStocksTable.status, status));

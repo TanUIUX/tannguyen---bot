@@ -12,7 +12,7 @@ import type z from "zod";
 const router: IRouter = Router();
 
 router.get("/transactions", requireAuth, validateQuery(ListTransactionsQueryParams), async (req, res): Promise<void> => {
-  const { page, limit, type, status, search } = req.query as unknown as z.infer<typeof ListTransactionsQueryParams>;
+  const { page, limit, type, status, search } = res.locals["query"] as z.infer<typeof ListTransactionsQueryParams>;
   const offset = (page - 1) * limit;
 
   const conditions = [];

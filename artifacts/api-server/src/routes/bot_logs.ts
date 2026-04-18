@@ -2,15 +2,14 @@ import { Router, type IRouter } from "express";
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
 import { db, botLogsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
+import { validateQuery } from "../middlewares/validate";
+import { ListBotLogsQueryParams } from "@workspace/api-zod";
+import type z from "zod";
 
 const router: IRouter = Router();
 
-router.get("/bot-logs", requireAuth, async (req, res): Promise<void> => {
-  const page = parseInt(String(req.query.page ?? "1"), 10);
-  const limit = parseInt(String(req.query.limit ?? "50"), 10);
-  const search = req.query.search as string | undefined;
-  const action = req.query.action as string | undefined;
-  const level = req.query.level as string | undefined;
+router.get("/bot-logs", requireAuth, validateQuery(ListBotLogsQueryParams), async (req, res): Promise<void> => {
+  const { page, limit, search, action, level } = res.locals["query"] as z.infer<typeof ListBotLogsQueryParams>;
   const offset = (page - 1) * limit;
 
   const conditions = [];

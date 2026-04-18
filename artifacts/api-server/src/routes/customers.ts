@@ -19,7 +19,7 @@ import type z from "zod";
 const router: IRouter = Router();
 
 router.get("/customers", requireAuth, validateQuery(ListCustomersQueryParams), async (req, res): Promise<void> => {
-  const { page, limit, search } = req.query as unknown as z.infer<typeof ListCustomersQueryParams>;
+  const { page, limit, search } = res.locals["query"] as z.infer<typeof ListCustomersQueryParams>;
   const offset = (page - 1) * limit;
 
   const where = search
@@ -48,7 +48,7 @@ router.get("/customers/:id", requireAuth, validateParams(GetCustomerParams), asy
 
 router.get("/customers/:id/orders", requireAuth, validateParams(GetCustomerOrdersParams), validateQuery(GetCustomerOrdersQueryParams), async (req, res): Promise<void> => {
   const { id } = req.params as unknown as z.infer<typeof GetCustomerOrdersParams>;
-  const { page, limit } = req.query as unknown as z.infer<typeof GetCustomerOrdersQueryParams>;
+  const { page, limit } = res.locals["query"] as z.infer<typeof GetCustomerOrdersQueryParams>;
   const offset = (page - 1) * limit;
 
   const [totalRow] = await db.select({ count: count() }).from(ordersTable).where(eq(ordersTable.customerId, id));
@@ -59,7 +59,7 @@ router.get("/customers/:id/orders", requireAuth, validateParams(GetCustomerOrder
 
 router.get("/customers/:id/transactions", requireAuth, validateParams(GetCustomerTransactionsParams), validateQuery(GetCustomerTransactionsQueryParams), async (req, res): Promise<void> => {
   const { id } = req.params as unknown as z.infer<typeof GetCustomerTransactionsParams>;
-  const { page, limit } = req.query as unknown as z.infer<typeof GetCustomerTransactionsQueryParams>;
+  const { page, limit } = res.locals["query"] as z.infer<typeof GetCustomerTransactionsQueryParams>;
   const offset = (page - 1) * limit;
 
   const [totalRow] = await db.select({ count: count() }).from(transactionsTable).where(eq(transactionsTable.customerId, id));

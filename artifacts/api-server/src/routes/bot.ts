@@ -176,7 +176,7 @@ router.post("/bot/webhook", validateBody(HandleBotWebhookBody), async (req, res)
     logger.error({ err }, "Error handling Telegram update");
   }
   // Always return 200 to Telegram to prevent retries
-  res.json({ ok: true });
+  res.json({ message: "ok" });
 });
 
 export default router;
