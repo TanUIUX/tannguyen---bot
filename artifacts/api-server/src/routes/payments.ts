@@ -57,6 +57,7 @@ router.get("/payments/config", requireAuth, async (_req, res): Promise<void> => 
     id: config.id,
     provider: config.provider,
     bankName: config.bankName,
+    bankCode: config.bankCode,
     accountNumber: config.accountNumber,
     accountHolder: config.accountHolder,
     webhookSecret: maskSecret(config.webhookSecret),
@@ -67,13 +68,14 @@ router.get("/payments/config", requireAuth, async (_req, res): Promise<void> => 
 });
 
 router.post("/payments/config", requireAuth, validateBody(SavePaymentConfigBody), async (req, res): Promise<void> => {
-  const { bankName, accountNumber, accountHolder, webhookSecret, apiKey, isActive } = req.body as z.infer<typeof SavePaymentConfigBody>;
+  const { bankName, bankCode, accountNumber, accountHolder, webhookSecret, apiKey, isActive } = req.body as z.infer<typeof SavePaymentConfigBody>;
   const existing = await getConfig();
 
   let config;
   if (existing) {
     const updateData: Record<string, unknown> = { isActive: isActive ?? existing.isActive };
     if (bankName !== undefined) updateData.bankName = bankName;
+    if (bankCode !== undefined) updateData.bankCode = bankCode;
     if (accountNumber !== undefined) updateData.accountNumber = accountNumber;
     if (accountHolder !== undefined) updateData.accountHolder = accountHolder;
     // Only update secrets if non-masked values are provided
@@ -84,7 +86,7 @@ router.post("/payments/config", requireAuth, validateBody(SavePaymentConfigBody)
     config = c;
   } else {
     const [c] = await db.insert(paymentConfigsTable).values({
-      provider: "sepay", bankName, accountNumber, accountHolder, webhookSecret, apiKey, isActive: isActive ?? false,
+      provider: "sepay", bankName, bankCode, accountNumber, accountHolder, webhookSecret, apiKey, isActive: isActive ?? false,
     }).returning();
     config = c;
   }
@@ -93,6 +95,7 @@ router.post("/payments/config", requireAuth, validateBody(SavePaymentConfigBody)
     id: config.id,
     provider: config.provider,
     bankName: config.bankName,
+    bankCode: config.bankCode,
     accountNumber: config.accountNumber,
     accountHolder: config.accountHolder,
     webhookSecret: maskSecret(config.webhookSecret),

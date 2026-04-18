@@ -902,6 +902,7 @@ export const GetPaymentConfigResponse = zod.object({
   id: zod.number().nullish(),
   provider: zod.string(),
   bankName: zod.string().nullish(),
+  bankCode: zod.string().nullish(),
   accountNumber: zod.string().nullish(),
   accountHolder: zod.string().nullish(),
   webhookSecret: zod.string().nullish(),
@@ -915,6 +916,7 @@ export const GetPaymentConfigResponse = zod.object({
  */
 export const SavePaymentConfigBody = zod.object({
   bankName: zod.string().optional(),
+  bankCode: zod.string().optional(),
   accountNumber: zod.string().optional(),
   accountHolder: zod.string().optional(),
   webhookSecret: zod.string().optional(),
@@ -926,6 +928,7 @@ export const SavePaymentConfigResponse = zod.object({
   id: zod.number().nullish(),
   provider: zod.string(),
   bankName: zod.string().nullish(),
+  bankCode: zod.string().nullish(),
   accountNumber: zod.string().nullish(),
   accountHolder: zod.string().nullish(),
   webhookSecret: zod.string().nullish(),

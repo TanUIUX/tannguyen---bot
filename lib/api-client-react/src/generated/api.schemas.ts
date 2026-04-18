@@ -376,6 +376,7 @@ export interface PaymentConfig {
   id?: number | null;
   provider: string;
   bankName?: string | null;
+  bankCode?: string | null;
   accountNumber?: string | null;
   accountHolder?: string | null;
   webhookSecret?: string | null;
@@ -386,6 +387,7 @@ export interface PaymentConfig {
 
 export interface SavePaymentConfigRequest {
   bankName?: string;
+  bankCode?: string;
   accountNumber?: string;
   accountHolder?: string;
   webhookSecret?: string;

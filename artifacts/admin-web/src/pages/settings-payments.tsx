@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 
 const paymentSchema = z.object({
   bankName: z.string().min(1, "Tên ngân hàng là bắt buộc"),
+  bankCode: z.string().optional(),
   accountNumber: z.string().min(1, "Số tài khoản là bắt buộc"),
   accountHolder: z.string().min(1, "Tên chủ tài khoản là bắt buộc"),
   apiKey: z.string().optional(),
@@ -37,6 +38,7 @@ export default function SettingsPayments() {
     resolver: zodResolver(paymentSchema),
     defaultValues: {
       bankName: "",
+      bankCode: "",
       accountNumber: "",
       accountHolder: "",
       apiKey: "",
@@ -49,6 +51,7 @@ export default function SettingsPayments() {
     if (config) {
       form.reset({
         bankName: config.bankName || "",
+        bankCode: config.bankCode || "",
         accountNumber: config.accountNumber || "",
         accountHolder: config.accountHolder || "",
         apiKey: "",
@@ -63,6 +66,7 @@ export default function SettingsPayments() {
   const onSubmit = (data: PaymentFormValues) => {
     const payload: Record<string, unknown> = {
       bankName: data.bankName,
+      bankCode: data.bankCode || undefined,
       accountNumber: data.accountNumber,
       accountHolder: data.accountHolder,
       isActive: data.isActive,
@@ -113,9 +117,9 @@ export default function SettingsPayments() {
                   name="bankName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Ngân hàng (Tên viết tắt)</FormLabel>
+                      <FormLabel>Tên ngân hàng</FormLabel>
                       <FormControl>
-                        <Input placeholder="VD: MBBank, VCB..." {...field} />
+                        <Input placeholder="VD: Vietcombank, MB Bank..." {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -123,18 +127,31 @@ export default function SettingsPayments() {
                 />
                 <FormField
                   control={form.control}
-                  name="accountNumber"
+                  name="bankCode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Số tài khoản</FormLabel>
+                      <FormLabel>Mã ngân hàng (cho QR)</FormLabel>
                       <FormControl>
-                        <Input placeholder="Số tài khoản nhận tiền" {...field} />
+                        <Input placeholder="VD: VCB, MB, TCB..." {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
+              <FormField
+                control={form.control}
+                name="accountNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Số tài khoản</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Số tài khoản nhận tiền" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

@@ -57,6 +57,31 @@ async function sendMessage(chatId: number | string, text: string, options?: Reco
   }
 }
 
+async function sendPhoto(chatId: number | string, photoUrl: string, caption?: string): Promise<boolean> {
+  const token = await getBotToken();
+  if (!token) return false;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption, parse_mode: "HTML" }),
+    });
+    const data = await res.json() as { ok: boolean; description?: string };
+    if (!data.ok) {
+      logger.warn({ chatId, error: data.description }, "Telegram sendPhoto returned ok=false");
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error({ err }, "Failed to send Telegram photo");
+    return false;
+  }
+}
+
+export async function sendMessageToCustomer(chatId: string, text: string): Promise<void> {
+  await sendMessage(chatId, text);
+}
+
 async function answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
   const token = await getBotToken();
   if (!token) return;
@@ -385,6 +410,61 @@ export async function deliverOrder(orderId: number): Promise<boolean> {
   return true;
 }
 
+async function handleTopup(chatId: number | string, customer: typeof customersTable.$inferSelect, text: string): Promise<void> {
+  const parts = text.trim().split(/\s+/);
+  const rawAmount = parts[1];
+
+  if (!rawAmount) {
+    await sendMessage(chatId,
+      `💳 <b>Nạp tiền vào tài khoản</b>\n\n` +
+      `Sử dụng lệnh: <code>/naptien [số tiền]</code>\n` +
+      `Ví dụ: <code>/naptien 100000</code>\n\n` +
+      `👛 Số dư hiện tại: <b>${parseFloat(customer.balance).toLocaleString("vi-VN")}đ</b>`
+    );
+    return;
+  }
+
+  const amount = parseInt(rawAmount.replace(/[.,]/g, ""), 10);
+  if (isNaN(amount) || amount <= 0) {
+    await sendMessage(chatId, "❌ Số tiền không hợp lệ. Vui lòng nhập số tiền dương.\nVí dụ: <code>/naptien 100000</code>");
+    return;
+  }
+
+  if (amount < 10000) {
+    await sendMessage(chatId, "❌ Số tiền nạp tối thiểu là <b>10.000đ</b>.");
+    return;
+  }
+
+  const { createTopupRequest } = await import("./payments");
+  const topupInfo = await createTopupRequest(customer.id, amount);
+
+  if (!topupInfo) {
+    await sendMessage(chatId, "❌ Không thể tạo yêu cầu nạp tiền. Vui lòng liên hệ admin.");
+    return;
+  }
+
+  const amountFormatted = amount.toLocaleString("vi-VN");
+  const caption =
+    `💳 <b>Nạp tiền ${amountFormatted}đ</b>\n\n` +
+    `🏦 Ngân hàng: <b>${topupInfo.bankName}</b>\n` +
+    `💳 Số tài khoản: <code>${topupInfo.accountNumber}</code>\n` +
+    `👤 Chủ tài khoản: <b>${topupInfo.accountHolder}</b>\n` +
+    `💰 Số tiền: <b>${amountFormatted}đ</b>\n` +
+    `📝 Nội dung CK: <code>${topupInfo.reference}</code>\n\n` +
+    `⚠️ <i>Vui lòng chuyển khoản đúng nội dung để hệ thống tự động cộng tiền vào tài khoản.</i>`;
+
+  let sent = false;
+  if (topupInfo.qrUrl) {
+    sent = await sendPhoto(chatId, topupInfo.qrUrl, caption);
+  }
+
+  if (!sent) {
+    await sendMessage(chatId, caption);
+  }
+
+  await logBotAction("topup_requested", String(chatId), customer.id, `Topup ${amountFormatted}đ`, { amount, reference: topupInfo.reference });
+}
+
 export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void> {
   try {
     if (update.message) {
@@ -402,6 +482,8 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
       if (text === "/start") {
         await logBotAction("start", String(chatId), customer.id, "/start command");
         await showMainMenu(chatId, from.first_name);
+      } else if (text.startsWith("/naptien")) {
+        await handleTopup(chatId, customer, text);
       }
     } else if (update.callback_query) {
       const cq = update.callback_query;

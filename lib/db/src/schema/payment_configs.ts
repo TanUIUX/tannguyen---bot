@@ -6,6 +6,7 @@ export const paymentConfigsTable = pgTable("payment_configs", {
   id: serial("id").primaryKey(),
   provider: text("provider").notNull().default("sepay"),
   bankName: text("bank_name"),
+  bankCode: text("bank_code"),
   accountNumber: text("account_number"),
   accountHolder: text("account_holder"),
   webhookSecret: text("webhook_secret"),
