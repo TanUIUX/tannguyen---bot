@@ -1,4 +1,4 @@
-import { useGetMe } from "@workspace/api-client-react";
+import { useGetMe, useLogout, getGetMeQueryKey } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
 import { 
   LayoutDashboard, 
@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { useLogout } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
@@ -37,12 +37,15 @@ const settingsItems = [
 
 export function Sidebar() {
   const [location] = useLocation();
+  const queryClient = useQueryClient();
   const logout = useLogout();
   const [, setLocation] = useLocation();
 
   const handleLogout = () => {
     logout.mutate(undefined, {
       onSuccess: () => {
+        queryClient.removeQueries({ queryKey: getGetMeQueryKey() });
+        queryClient.clear();
         setLocation("/login");
       }
     });

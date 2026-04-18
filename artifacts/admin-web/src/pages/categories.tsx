@@ -9,7 +9,8 @@ import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Switch } from "@/components/ui/switch";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -116,6 +117,21 @@ export default function Categories() {
                         <Input placeholder="VD: Netflix, Spotify..." {...field} data-testid="input-category-name" />
                       </FormControl>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="isActive"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                      <div>
+                        <FormLabel className="text-sm font-medium">Đang hoạt động</FormLabel>
+                        <FormDescription className="text-xs">Hiển thị danh mục cho khách hàng</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-category-active" />
+                      </FormControl>
                     </FormItem>
                   )}
                 />

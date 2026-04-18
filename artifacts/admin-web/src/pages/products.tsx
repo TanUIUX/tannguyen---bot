@@ -10,7 +10,8 @@ import { Loader2, Plus, Pencil, Trash2, Box } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Switch } from "@/components/ui/switch";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -233,6 +234,21 @@ export default function Products() {
                     )}
                   />
                 </div>
+                <FormField
+                  control={form.control}
+                  name="isActive"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                      <div>
+                        <FormLabel className="text-sm font-medium">Đang bán</FormLabel>
+                        <FormDescription className="text-xs">Hiển thị sản phẩm cho khách hàng</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-product-active" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
                 <Button type="submit" className="w-full mt-4" disabled={createProduct.isPending || updateProduct.isPending}>
                   {createProduct.isPending || updateProduct.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Lưu sản phẩm
