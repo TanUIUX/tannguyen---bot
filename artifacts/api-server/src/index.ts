@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { seed } from "./lib/seed";
 import { startScheduledRetrySweep } from "./lib/scheduledRetry";
+import { startPendingOrderExpirySweep } from "./lib/pendingOrderExpiry";
 
 const rawPort = process.env["PORT"];
 
@@ -33,4 +34,5 @@ app.listen(port, async (err) => {
   }
 
   startScheduledRetrySweep();
+  startPendingOrderExpirySweep();
 });
