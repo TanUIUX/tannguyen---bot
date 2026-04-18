@@ -808,9 +808,20 @@ async function sendBankTransferForOrder(chatId: number | string, orderId: number
   msg += `Chủ TK: <b>${paymentInfo.accountHolder}</b>\n`;
   msg += `Số tiền: <b>${amountFormatted}đ</b>\n`;
   msg += `Nội dung CK: <code>${paymentInfo.reference}</code>\n\n`;
+  msg += `📱 <i>Quét mã QR bên trên hoặc chuyển khoản theo thông tin trên.</i>\n`;
   msg += `⚠️ <i>Vui lòng chuyển khoản đúng nội dung để đơn hàng được xử lý tự động.</i>`;
 
-  await sendMessage(chatId, msg);
+  // If we have a SePay QR URL, send the QR image with the payment details as the
+  // caption — this matches the topup flow and lets customers pay by scanning.
+  // Fall back to a plain text message if QR generation failed for any reason.
+  if (paymentInfo.qrUrl) {
+    const sent = await sendPhoto(chatId, paymentInfo.qrUrl, msg);
+    if (!sent) {
+      await sendMessage(chatId, msg);
+    }
+  } else {
+    await sendMessage(chatId, msg);
+  }
 }
 
 export async function deliverOrder(orderId: number, opts: { isRetry?: boolean } = {}): Promise<boolean> {
