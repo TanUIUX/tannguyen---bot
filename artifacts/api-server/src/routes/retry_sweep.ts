@@ -1,9 +1,14 @@
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../middlewares/auth";
-import { runStuckOrderRetrySweep } from "../lib/scheduledRetry";
+import { runStuckOrderRetrySweep, getLastSweepAt } from "../lib/scheduledRetry";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+
+router.get("/admin/retry-sweep/status", requireAuth, async (_req, res): Promise<void> => {
+  const ts = getLastSweepAt();
+  res.json({ lastSweepAt: ts ? ts.toISOString() : null });
+});
 
 router.post("/admin/retry-sweep", requireAuth, async (_req, res): Promise<void> => {
   try {

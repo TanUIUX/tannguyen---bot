@@ -458,6 +458,13 @@ export const GetOrderResponse = zod.object({
 });
 
 /**
+ * @summary Get last retry sweep timestamp
+ */
+export const GetRetrySweepStatusResponse = zod.object({
+  lastSweepAt: zod.coerce.date().nullable(),
+});
+
+/**
  * @summary Trigger a stuck-order retry sweep immediately
  */
 export const TriggerRetrySweepResponse = zod.object({
@@ -467,6 +474,7 @@ export const TriggerRetrySweepResponse = zod.object({
   failed: zod.number(),
   errored: zod.number(),
   exhausted: zod.number(),
+  lastSweepAt: zod.coerce.date().nullable(),
 });
 
 /**

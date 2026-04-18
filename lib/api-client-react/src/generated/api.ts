@@ -54,6 +54,7 @@ import type {
   Promotion,
   PromotionList,
   RetrySweepResult,
+  RetrySweepStatus,
   SaveBotConfigRequest,
   SavePaymentConfigRequest,
   StockList,
@@ -1764,6 +1765,81 @@ export function useGetOrder<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetOrderQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get last retry sweep timestamp
+ */
+export const getGetRetrySweepStatusUrl = () => {
+  return `/api/admin/retry-sweep/status`;
+};
+
+export const getRetrySweepStatus = async (
+  options?: RequestInit,
+): Promise<RetrySweepStatus> => {
+  return customFetch<RetrySweepStatus>(getGetRetrySweepStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRetrySweepStatusQueryKey = () => {
+  return [`/api/admin/retry-sweep/status`] as const;
+};
+
+export const getGetRetrySweepStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRetrySweepStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getRetrySweepStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRetrySweepStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRetrySweepStatus>>
+  > = ({ signal }) => getRetrySweepStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRetrySweepStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRetrySweepStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRetrySweepStatus>>
+>;
+export type GetRetrySweepStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get last retry sweep timestamp
+ */
+
+export function useGetRetrySweepStatus<
+  TData = Awaited<ReturnType<typeof getRetrySweepStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getRetrySweepStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRetrySweepStatusQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

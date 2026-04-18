@@ -1,5 +1,6 @@
-import { useListOrders, useTriggerRetrySweep, ApiError } from "@workspace/api-client-react";
+import { useListOrders, useTriggerRetrySweep, useGetRetrySweepStatus, ApiError, getGetRetrySweepStatusQueryKey } from "@workspace/api-client-react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatVND, formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -29,10 +30,29 @@ const STATUS_STYLES: Record<string, string> = {
   retry_exhausted: "bg-red-700/20 text-red-400",
 };
 
+function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return "Chưa có lần quét nào";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return "vừa xong";
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec} giây trước`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} phút trước`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} giờ trước`;
+  const days = Math.floor(hr / 24);
+  return `${days} ngày trước`;
+}
+
 export default function Orders() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<string>("all");
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: sweepStatus } = useGetRetrySweepStatus({
+    query: { refetchInterval: 60_000, queryKey: getGetRetrySweepStatusQueryKey() },
+  });
 
   const { data: orderList, isLoading } = useListOrders({
     page,
@@ -43,6 +63,7 @@ export default function Orders() {
   const { mutate: triggerSweep, isPending: sweepPending } = useTriggerRetrySweep({
     mutation: {
       onSuccess: (result) => {
+        queryClient.invalidateQueries({ queryKey: getGetRetrySweepStatusQueryKey() });
         if (result.alreadyRunning) {
           toast({
             title: "Quét đang chạy",
@@ -91,18 +112,23 @@ export default function Orders() {
           <h1 className="text-3xl font-bold tracking-tight">Đơn hàng</h1>
           <p className="text-muted-foreground mt-1">Quản lý tất cả đơn hàng từ Telegram.</p>
         </div>
-        <Button
-          onClick={() => triggerSweep()}
-          disabled={sweepPending}
-          data-testid="btn-retry-sweep"
-        >
-          {sweepPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
-          Thử lại ngay
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            onClick={() => triggerSweep()}
+            disabled={sweepPending}
+            data-testid="btn-retry-sweep"
+          >
+            {sweepPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Thử lại ngay
+          </Button>
+          <p className="text-xs text-muted-foreground" data-testid="text-last-sweep">
+            Lần quét cuối: <span className="font-medium">{formatRelativeTime(sweepStatus?.lastSweepAt)}</span>
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center gap-4">

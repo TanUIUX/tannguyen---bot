@@ -478,6 +478,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /admin/retry-sweep/status:
+    get:
+      operationId: getRetrySweepStatus
+      tags: [orders]
+      summary: Get last retry sweep timestamp
+      responses:
+        "200":
+          description: Last sweep status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetrySweepStatus"
+
   /admin/retry-sweep:
     post:
       operationId: triggerRetrySweep
@@ -1054,6 +1067,10 @@ components:
           type: integer
         exhausted:
           type: integer
+        lastSweepAt:
+          type: string
+          format: date-time
+          nullable: true
       required:
         - alreadyRunning
         - swept
@@ -1061,6 +1078,17 @@ components:
         - failed
         - errored
         - exhausted
+        - lastSweepAt
+
+    RetrySweepStatus:
+      type: object
+      properties:
+        lastSweepAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - lastSweepAt
 
     LoginRequest:
       type: object

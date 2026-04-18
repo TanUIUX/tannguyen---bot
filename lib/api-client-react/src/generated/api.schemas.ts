@@ -24,6 +24,11 @@ export interface RetrySweepResult {
   failed: number;
   errored: number;
   exhausted: number;
+  lastSweepAt: string | null;
+}
+
+export interface RetrySweepStatus {
+  lastSweepAt: string | null;
 }
 
 export interface LoginRequest {
