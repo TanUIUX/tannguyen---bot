@@ -1,9 +1,11 @@
+import { useMemo, useState } from "react";
 import { useGetRestockQueue, getGetRestockQueueQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Loader2, Eye, PackageX, RefreshCw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Eye, PackageX, RefreshCw, X } from "lucide-react";
 import { formatVND } from "@/lib/utils";
 
 function formatWaitTime(iso: string): string {
@@ -26,12 +28,58 @@ function urgencyClass(iso: string): string {
   return "text-yellow-500";
 }
 
+type ProductSummary = {
+  productId: number;
+  productName: string;
+  totalQuantity: number;
+  orderCount: number;
+  customerCount: number;
+};
+
 export default function RestockQueue() {
   const { data, isLoading, refetch, isFetching } = useGetRestockQueue({
     query: { refetchInterval: 30_000, queryKey: getGetRestockQueueQueryKey() },
   });
 
   const orders = data?.data ?? [];
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+
+  const summaries: ProductSummary[] = useMemo(() => {
+    const map = new Map<number, { name: string; qty: number; orderIds: Set<number | string>; customerIds: Set<number | string> }>();
+    for (const o of orders) {
+      for (const it of o.items) {
+        const entry = map.get(it.productId) ?? {
+          name: it.productName ?? `#${it.productId}`,
+          qty: 0,
+          orderIds: new Set<number | string>(),
+          customerIds: new Set<number | string>(),
+        };
+        entry.qty += it.quantity;
+        entry.orderIds.add(o.id);
+        if (o.customer) entry.customerIds.add(o.customer.id);
+        if (it.productName && entry.name.startsWith("#")) entry.name = it.productName;
+        map.set(it.productId, entry);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([productId, v]) => ({
+        productId,
+        productName: v.name,
+        totalQuantity: v.qty,
+        orderCount: v.orderIds.size,
+        customerCount: v.customerIds.size,
+      }))
+      .sort((a, b) => b.totalQuantity - a.totalQuantity);
+  }, [orders]);
+
+  const filteredOrders = useMemo(() => {
+    if (selectedProductId == null) return orders;
+    return orders.filter((o) => o.items.some((it) => it.productId === selectedProductId));
+  }, [orders, selectedProductId]);
+
+  const selectedProductName = selectedProductId != null
+    ? (summaries.find((s) => s.productId === selectedProductId)?.productName ?? `#${selectedProductId}`)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -48,16 +96,84 @@ export default function RestockQueue() {
         </Button>
       </div>
 
+      {summaries.length > 0 && (
+        <Card data-testid="card-restock-summary">
+          <CardHeader>
+            <CardTitle className="text-lg">Nhu cầu nhập hàng theo sản phẩm</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Sản phẩm</TableHead>
+                  <TableHead className="text-right">Số đơn</TableHead>
+                  <TableHead className="text-right">Khách đang chờ</TableHead>
+                  <TableHead className="text-right">Tổng SL cần nhập</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {summaries.map((s) => {
+                  const isSelected = s.productId === selectedProductId;
+                  return (
+                    <TableRow
+                      key={s.productId}
+                      className={`cursor-pointer hover-elevate ${isSelected ? "bg-muted" : ""}`}
+                      onClick={() => setSelectedProductId(isSelected ? null : s.productId)}
+                      data-testid={`row-summary-${s.productId}`}
+                    >
+                      <TableCell className="font-medium">
+                        {s.productName}
+                        {isSelected && (
+                          <Badge variant="secondary" className="ml-2">Đang lọc</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right" data-testid={`text-summary-orders-${s.productId}`}>
+                        {s.orderCount} đơn
+                      </TableCell>
+                      <TableCell className="text-right" data-testid={`text-summary-customers-${s.productId}`}>
+                        {s.customerCount} khách
+                      </TableCell>
+                      <TableCell className="text-right font-semibold" data-testid={`text-summary-qty-${s.productId}`}>
+                        {s.totalQuantity} cái
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {selectedProductId != null && (
+        <div className="flex items-center gap-2 text-sm" data-testid="filter-banner">
+          <span className="text-muted-foreground">Đang lọc theo sản phẩm:</span>
+          <Badge variant="secondary">{selectedProductName}</Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedProductId(null)}
+            data-testid="btn-clear-filter"
+          >
+            <X className="h-3 w-3 mr-1" /> Bỏ lọc
+          </Button>
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex h-32 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : orders.length === 0 ? (
+          ) : filteredOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <PackageX className="h-10 w-10 mb-3 opacity-50" />
-              <p>Không có đơn nào đang chờ nhập hàng.</p>
+              <p>
+                {selectedProductId != null
+                  ? "Không có đơn nào khớp với bộ lọc."
+                  : "Không có đơn nào đang chờ nhập hàng."}
+              </p>
             </div>
           ) : (
             <Table>
@@ -73,7 +189,7 @@ export default function RestockQueue() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orders.map((o) => {
+                {filteredOrders.map((o) => {
                   const fullName = o.customer ? [o.customer.firstName, o.customer.lastName].filter(Boolean).join(" ") : "";
                   const customerLabel = fullName
                     || (o.customer?.username ? "@" + o.customer.username : null)
@@ -91,7 +207,10 @@ export default function RestockQueue() {
                       <TableCell>
                         <div className="flex flex-col gap-0.5">
                           {o.items.map((it) => (
-                            <span key={it.id} className="text-sm">
+                            <span
+                              key={it.id}
+                              className={`text-sm ${selectedProductId === it.productId ? "font-semibold" : ""}`}
+                            >
                               {it.productName ?? `#${it.productId}`} <span className="text-muted-foreground">×{it.quantity}</span>
                             </span>
                           ))}
