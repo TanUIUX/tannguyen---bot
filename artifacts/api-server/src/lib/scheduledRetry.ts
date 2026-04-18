@@ -1,6 +1,6 @@
-import { db, botLogsTable, ordersTable } from "@workspace/db";
+import { db, botLogsTable, ordersTable, customersTable } from "@workspace/db";
 import { or, eq, and, lt, sql } from "drizzle-orm";
-import { deliverOrder, sendAdminAlert } from "./bot";
+import { deliverOrder, sendAdminAlert, sendMessageToCustomer } from "./bot";
 import { logger } from "./logger";
 import { getOrCreateSystemSettings } from "./systemSettings";
 
@@ -48,7 +48,7 @@ export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
 
     // Step 1: Identify orders that have hit the retry limit and exhaust them
     const toExhaust = await db
-      .select({ id: ordersTable.id, orderCode: ordersTable.orderCode, retryCount: ordersTable.retryCount, createdAt: ordersTable.createdAt })
+      .select({ id: ordersTable.id, orderCode: ordersTable.orderCode, retryCount: ordersTable.retryCount, createdAt: ordersTable.createdAt, customerId: ordersTable.customerId })
       .from(ordersTable)
       .where(
         and(
@@ -94,6 +94,23 @@ export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
         orderLink,
         { orderId: order.id, orderCode: order.orderCode, retryCount: order.retryCount }
       );
+
+      try {
+        const [customer] = await db
+          .select({ chatId: customersTable.chatId })
+          .from(customersTable)
+          .where(eq(customersTable.id, order.customerId));
+        if (customer?.chatId) {
+          await sendMessageToCustomer(
+            customer.chatId,
+            `😔 <b>Đơn hàng không thể hoàn tất</b>\n\n` +
+            `Rất tiếc, đơn hàng <code>${order.orderCode}</code> của bạn không thể giao sau nhiều lần thử (${reason}).\n\n` +
+            `Nhân viên shop sẽ liên hệ để hỗ trợ bạn. Nếu đơn hàng đã được thanh toán, số tiền sẽ được hoàn lại vào ví của bạn. Cảm ơn bạn đã kiên nhẫn! 💚`
+          );
+        }
+      } catch (notifyErr) {
+        logger.error({ notifyErr, orderId: order.id, orderCode: order.orderCode }, "Failed to send retry-exhausted notification to customer");
+      }
 
       logger.warn({ orderId: order.id, orderCode: order.orderCode, retryCount: order.retryCount }, "Order marked retry_exhausted");
     }
