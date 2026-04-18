@@ -48,8 +48,15 @@ router.get("/products", requireAuth, validateQuery(ListProductsQueryParams), asy
     isActive: productsTable.isActive,
     createdAt: productsTable.createdAt,
     updatedAt: productsTable.updatedAt,
-    stockCount: sql<number>`(SELECT COUNT(*) FROM product_stocks WHERE product_id = ${productsTable.id} AND status = 'available')::int`,
-  }).from(productsTable).where(where).orderBy(productsTable.createdAt).limit(limit).offset(offset);
+    stockCount: sql<number>`COALESCE(SUM(CASE WHEN ${productStocksTable.status} = 'available' THEN 1 ELSE 0 END), 0)::int`,
+  })
+    .from(productsTable)
+    .leftJoin(productStocksTable, eq(productStocksTable.productId, productsTable.id))
+    .where(where)
+    .groupBy(productsTable.id)
+    .orderBy(productsTable.createdAt)
+    .limit(limit)
+    .offset(offset);
 
   res.json({ data: products, total: totalRow?.count ?? 0, page, limit });
 });
@@ -89,8 +96,12 @@ router.get("/products/:id", requireAuth, validateParams(GetProductParams), async
     isActive: productsTable.isActive,
     createdAt: productsTable.createdAt,
     updatedAt: productsTable.updatedAt,
-    stockCount: sql<number>`(SELECT COUNT(*) FROM product_stocks WHERE product_id = ${productsTable.id} AND status = 'available')::int`,
-  }).from(productsTable).where(eq(productsTable.id, id));
+    stockCount: sql<number>`COALESCE(SUM(CASE WHEN ${productStocksTable.status} = 'available' THEN 1 ELSE 0 END), 0)::int`,
+  })
+    .from(productsTable)
+    .leftJoin(productStocksTable, eq(productStocksTable.productId, productsTable.id))
+    .where(eq(productsTable.id, id))
+    .groupBy(productsTable.id);
 
   if (!product) {
     res.status(404).json({ error: "Product not found" });
