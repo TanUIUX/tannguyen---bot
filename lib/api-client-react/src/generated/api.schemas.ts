@@ -17,6 +17,11 @@ export interface MessageResponse {
   message: string;
 }
 
+export interface FailedOrderRef {
+  id: number;
+  orderCode: string;
+}
+
 export interface RetrySweepResult {
   alreadyRunning: boolean;
   swept: number;
@@ -24,6 +29,8 @@ export interface RetrySweepResult {
   failed: number;
   errored: number;
   exhausted: number;
+  failedOrders: FailedOrderRef[];
+  erroredOrders: FailedOrderRef[];
   lastSweepAt: string | null;
 }
 

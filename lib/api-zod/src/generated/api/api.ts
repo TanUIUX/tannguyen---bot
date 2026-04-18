@@ -508,6 +508,18 @@ export const TriggerRetrySweepResponse = zod.object({
   failed: zod.number(),
   errored: zod.number(),
   exhausted: zod.number(),
+  failedOrders: zod.array(
+    zod.object({
+      id: zod.number(),
+      orderCode: zod.string(),
+    }),
+  ),
+  erroredOrders: zod.array(
+    zod.object({
+      id: zod.number(),
+      orderCode: zod.string(),
+    }),
+  ),
   lastSweepAt: zod.coerce.date().nullable(),
 });
 

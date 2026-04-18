@@ -17,6 +17,11 @@ export function getLastSweepAt(): Date | null {
   return lastSweepAt;
 }
 
+export interface FailedOrderRef {
+  id: number;
+  orderCode: string;
+}
+
 export interface RetrySweepResult {
   alreadyRunning: boolean;
   swept: number;
@@ -24,13 +29,15 @@ export interface RetrySweepResult {
   failed: number;
   errored: number;
   exhausted: number;
+  failedOrders: FailedOrderRef[];
+  erroredOrders: FailedOrderRef[];
   lastSweepAt: string | null;
 }
 
 export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
   if (sweepRunning) {
     logger.warn("Scheduled retry sweep skipped: previous sweep still running");
-    return { alreadyRunning: true, swept: 0, delivered: 0, failed: 0, errored: 0, exhausted: 0, lastSweepAt: lastSweepAt?.toISOString() ?? null };
+    return { alreadyRunning: true, swept: 0, delivered: 0, failed: 0, errored: 0, exhausted: 0, failedOrders: [], erroredOrders: [], lastSweepAt: lastSweepAt?.toISOString() ?? null };
   }
   sweepRunning = true;
   try {
@@ -119,7 +126,7 @@ export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
         level: "info",
       });
       lastSweepAt = new Date();
-      return { alreadyRunning: false, swept: 0, delivered: 0, failed: 0, errored: 0, exhausted: toExhaust.length, lastSweepAt: lastSweepAt.toISOString() };
+      return { alreadyRunning: false, swept: 0, delivered: 0, failed: 0, errored: 0, exhausted: toExhaust.length, failedOrders: [], erroredOrders: [], lastSweepAt: lastSweepAt.toISOString() };
     }
 
     logger.info({ count: stuckOrders.length }, "Scheduled retry sweep: attempting delivery for stuck orders");
@@ -130,6 +137,8 @@ export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
     const deliveredCodes: string[] = [];
     const failedCodes: string[] = [];
     const erroredCodes: string[] = [];
+    const failedOrders: FailedOrderRef[] = [];
+    const erroredOrders: FailedOrderRef[] = [];
 
     for (const { id: orderId, orderCode, status, retryCount } of stuckOrders) {
       try {
@@ -164,6 +173,7 @@ export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
 
           errored++;
           erroredCodes.push(orderCode);
+          erroredOrders.push({ id: orderId, orderCode });
           continue;
         }
 
@@ -182,11 +192,13 @@ export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
           // incremented retryCount on entry; nothing else to do here.
           failed++;
           failedCodes.push(orderCode);
+          failedOrders.push({ id: orderId, orderCode });
         }
       } catch (orderErr) {
         logger.error({ err: orderErr, orderId, orderCode }, "Unexpected error processing order during sweep");
         errored++;
         erroredCodes.push(orderCode);
+        erroredOrders.push({ id: orderId, orderCode });
       }
     }
 
@@ -231,7 +243,7 @@ export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
 
     logger.info({ swept: stuckOrders.length, delivered, failed, errored, exhausted: toExhaust.length }, "Scheduled retry sweep completed");
     lastSweepAt = new Date();
-    return { alreadyRunning: false, swept: stuckOrders.length, delivered, failed, errored, exhausted: toExhaust.length, lastSweepAt: lastSweepAt.toISOString() };
+    return { alreadyRunning: false, swept: stuckOrders.length, delivered, failed, errored, exhausted: toExhaust.length, failedOrders, erroredOrders, lastSweepAt: lastSweepAt.toISOString() };
   } catch (err) {
     logger.error({ err }, "Scheduled retry sweep encountered an error");
     await db.insert(botLogsTable).values({

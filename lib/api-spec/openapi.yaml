@@ -1109,6 +1109,17 @@ components:
       required:
         - message
 
+    FailedOrderRef:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderCode:
+          type: string
+      required:
+        - id
+        - orderCode
+
     RetrySweepResult:
       type: object
       properties:
@@ -1124,6 +1135,14 @@ components:
           type: integer
         exhausted:
           type: integer
+        failedOrders:
+          type: array
+          items:
+            $ref: "#/components/schemas/FailedOrderRef"
+        erroredOrders:
+          type: array
+          items:
+            $ref: "#/components/schemas/FailedOrderRef"
         lastSweepAt:
           type: string
           format: date-time
@@ -1135,6 +1154,8 @@ components:
         - failed
         - errored
         - exhausted
+        - failedOrders
+        - erroredOrders
         - lastSweepAt
 
     RestockQueueItem:

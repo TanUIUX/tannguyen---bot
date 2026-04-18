@@ -72,20 +72,47 @@ export default function Orders() {
           });
           return;
         }
-        const parts: string[] = [];
         if (result.swept === 0) {
-          parts.push("Không có đơn hàng bị kẹt nào để thử lại.");
+          toast({
+            title: "Quét hoàn tất",
+            description: "Không có đơn hàng bị kẹt nào để thử lại.",
+          });
         } else {
-          parts.push(`Đã quét ${result.swept} đơn hàng.`);
-          if (result.delivered > 0) parts.push(`✅ Giao thành công: ${result.delivered}`);
-          if (result.failed > 0) parts.push(`❌ Thất bại: ${result.failed}`);
-          if (result.errored > 0) parts.push(`⚠️ Lỗi: ${result.errored}`);
-          if (result.exhausted > 0) parts.push(`🚫 Hết lượt: ${result.exhausted}`);
+          const summaryParts: string[] = [`Đã quét ${result.swept} đơn hàng.`];
+          if (result.delivered > 0) summaryParts.push(`✅ Giao thành công: ${result.delivered}`);
+          if (result.failed > 0) summaryParts.push(`❌ Thất bại: ${result.failed}`);
+          if (result.errored > 0) summaryParts.push(`⚠️ Lỗi: ${result.errored}`);
+          if (result.exhausted > 0) summaryParts.push(`🚫 Hết lượt: ${result.exhausted}`);
+
+          const renderOrderLinks = (label: string, orders: { id: number; orderCode: string }[], testid: string) => (
+            <div className="mt-1" data-testid={testid}>
+              <span>{label} </span>
+              {orders.map((o, idx) => (
+                <span key={o.id}>
+                  <Link
+                    href={`/orders/${o.id}`}
+                    className="font-mono underline underline-offset-2 hover:text-foreground"
+                    data-testid={`link-failed-order-${o.id}`}
+                  >
+                    {o.orderCode}
+                  </Link>
+                  {idx < orders.length - 1 ? ", " : ""}
+                </span>
+              ))}
+            </div>
+          );
+
+          toast({
+            title: "Quét hoàn tất",
+            description: (
+              <div className="space-y-1">
+                <div>{summaryParts.join(" ")}</div>
+                {result.failedOrders.length > 0 && renderOrderLinks("Đơn thất bại:", result.failedOrders, "failed-orders-list")}
+                {result.erroredOrders.length > 0 && renderOrderLinks("Đơn lỗi:", result.erroredOrders, "errored-orders-list")}
+              </div>
+            ),
+          });
         }
-        toast({
-          title: "Quét hoàn tất",
-          description: parts.join(" "),
-        });
       },
       onError: (error) => {
         if (error instanceof ApiError && error.status === 409) {
