@@ -2,11 +2,10 @@ import { db, botLogsTable, ordersTable } from "@workspace/db";
 import { or, eq, and, lt, sql } from "drizzle-orm";
 import { deliverOrder, sendAdminAlert } from "./bot";
 import { logger } from "./logger";
+import { getOrCreateSystemSettings } from "./systemSettings";
 
 const _sweepIntervalMinutes = Math.max(1, parseInt(process.env.RETRY_SWEEP_INTERVAL_MINUTES ?? "20", 10) || 20);
 const RETRY_INTERVAL_MS = _sweepIntervalMinutes * 60 * 1000;
-const MAX_RETRY_COUNT = 10;
-const MAX_ORDER_AGE_DAYS = 7;
 
 const STUCK_STATUSES = ["needs_manual_action", "confirmed_not_delivered"] as const;
 type StuckStatus = typeof STUCK_STATUSES[number];
@@ -35,6 +34,9 @@ export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
   }
   sweepRunning = true;
   try {
+    const settings = await getOrCreateSystemSettings();
+    const MAX_RETRY_COUNT = settings.maxRetryCount;
+    const MAX_ORDER_AGE_DAYS = settings.maxOrderAgeDays;
     const ageThreshold = new Date(Date.now() - MAX_ORDER_AGE_DAYS * 24 * 60 * 60 * 1000);
 
     // Step 1: Identify orders that have hit the retry limit and exhaust them
@@ -245,7 +247,7 @@ export async function runStuckOrderRetrySweep(): Promise<RetrySweepResult> {
 }
 
 export function startScheduledRetrySweep(): void {
-  logger.info({ intervalMinutes: _sweepIntervalMinutes, intervalMs: RETRY_INTERVAL_MS, maxRetryCount: MAX_RETRY_COUNT, maxOrderAgeDays: MAX_ORDER_AGE_DAYS }, "Starting scheduled retry sweep");
+  logger.info({ intervalMinutes: _sweepIntervalMinutes, intervalMs: RETRY_INTERVAL_MS }, "Starting scheduled retry sweep (retry limits read from system_settings on each sweep)");
   setInterval(() => {
     runStuckOrderRetrySweep().catch(err => {
       logger.error({ err }, "Unhandled error in scheduled retry sweep");

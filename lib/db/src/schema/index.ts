@@ -10,3 +10,4 @@ export * from "./promotions";
 export * from "./bot_configs";
 export * from "./payment_configs";
 export * from "./bot_logs";
+export * from "./system_settings";

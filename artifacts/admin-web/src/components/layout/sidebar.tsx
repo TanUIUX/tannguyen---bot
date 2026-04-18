@@ -11,6 +11,7 @@ import {
   Bot, 
   Activity,
   PackageX,
+  RotateCcw,
   LogOut,
   Menu,
   X
@@ -35,6 +36,7 @@ const navItems = [
 const settingsItems = [
   { href: "/settings/bot", label: "Cấu hình Bot", icon: Bot },
   { href: "/settings/payments", label: "Thanh toán", icon: Settings },
+  { href: "/settings/retry", label: "Quét lại đơn", icon: RotateCcw },
 ];
 
 export function Sidebar() {

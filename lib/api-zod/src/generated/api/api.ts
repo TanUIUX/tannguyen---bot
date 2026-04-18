@@ -890,6 +890,39 @@ export const DeletePromotionParams = zod.object({
 });
 
 /**
+ * @summary Get system settings (retry limits, etc.)
+ */
+export const GetSystemSettingsResponse = zod.object({
+  maxRetryCount: zod.number(),
+  maxOrderAgeDays: zod.number(),
+  updatedAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Update system settings
+ */
+export const updateSystemSettingsBodyMaxRetryCountMax = 1000;
+
+export const updateSystemSettingsBodyMaxOrderAgeDaysMax = 365;
+
+export const UpdateSystemSettingsBody = zod.object({
+  maxRetryCount: zod
+    .number()
+    .min(1)
+    .max(updateSystemSettingsBodyMaxRetryCountMax),
+  maxOrderAgeDays: zod
+    .number()
+    .min(1)
+    .max(updateSystemSettingsBodyMaxOrderAgeDaysMax),
+});
+
+export const UpdateSystemSettingsResponse = zod.object({
+  maxRetryCount: zod.number(),
+  maxOrderAgeDays: zod.number(),
+  updatedAt: zod.coerce.date().nullish(),
+});
+
+/**
  * @summary Get bot configuration
  */
 export const GetBotConfigResponse = zod.object({

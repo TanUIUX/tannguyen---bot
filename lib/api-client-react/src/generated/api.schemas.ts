@@ -468,6 +468,25 @@ export interface SavePaymentConfigRequest {
   isActive?: boolean;
 }
 
+export interface SystemSettings {
+  maxRetryCount: number;
+  maxOrderAgeDays: number;
+  updatedAt?: string | null;
+}
+
+export interface UpdateSystemSettingsRequest {
+  /**
+   * @minimum 1
+   * @maximum 1000
+   */
+  maxRetryCount: number;
+  /**
+   * @minimum 1
+   * @maximum 365
+   */
+  maxOrderAgeDays: number;
+}
+
 export type ListProductsParams = {
   page?: number;
   limit?: number;
