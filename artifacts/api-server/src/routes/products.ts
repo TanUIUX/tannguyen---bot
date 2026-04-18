@@ -1,9 +1,9 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, and, sql, count, or, lt } from "drizzle-orm";
-import { db, productsTable, productStocksTable, categoriesTable, ordersTable, orderItemsTable, botLogsTable } from "@workspace/db";
+import { db, productsTable, productStocksTable, categoriesTable, ordersTable, orderItemsTable, botLogsTable, customersTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { validateBody, validateParams, validateQuery } from "../middlewares/validate";
-import { deliverOrder, sendAdminNotification } from "../lib/bot";
+import { deliverOrder, sendAdminNotification, sendMessageToCustomer } from "../lib/bot";
 import { logger } from "../lib/logger";
 import {
   ListProductsQueryParams,
@@ -199,11 +199,25 @@ async function retryStuckOrdersForProduct(productId: number): Promise<void> {
         .update(ordersTable)
         .set({ status: "paid" })
         .where(and(eq(ordersTable.id, orderId), or(...stuckStatuses.map(s => eq(ordersTable.status, s)))))
-        .returning({ id: ordersTable.id });
+        .returning({ id: ordersTable.id, customerId: ordersTable.customerId });
 
       if (!updated) continue;
 
       const success = await deliverOrder(orderId);
+
+      if (success) {
+        try {
+          const [customer] = await db.select({ chatId: customersTable.chatId }).from(customersTable).where(eq(customersTable.id, updated.customerId));
+          if (customer?.chatId) {
+            await sendMessageToCustomer(
+              customer.chatId,
+              `🎉 <b>Tin vui!</b> Đơn hàng <code>${orderCode}</code> trước đây đang chờ nhập kho đã được giao tự động sau khi shop nhập thêm hàng. Vui lòng kiểm tra tin nhắn giao hàng phía trên. Cảm ơn bạn đã kiên nhẫn chờ đợi! 💚`
+            );
+          }
+        } catch (notifyErr) {
+          logger.error({ notifyErr, orderId, orderCode }, "Failed to send restock-fulfilled notification to customer");
+        }
+      }
 
       if (!success) {
         // Increment retry count so the sweep can eventually exhaust this order
