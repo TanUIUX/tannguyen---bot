@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Bot, Unplug, Plug, Activity } from "lucide-react";
+import { Loader2, Bot, Unplug, Plug, Activity, Eye, EyeOff } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -20,6 +20,7 @@ type BotFormValues = z.infer<typeof botSchema>;
 export default function SettingsBot() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [showToken, setShowToken] = useState(false);
   
   const { data: config, isLoading } = useGetBotConfig({
     query: { queryKey: getGetBotConfigQueryKey() }
@@ -50,7 +51,7 @@ export default function SettingsBot() {
       { data },
       {
         onSuccess: () => {
-          toast({ title: "Đã lưu token" });
+          toast({ title: "Đã lưu cấu hình Bot" });
           queryClient.invalidateQueries({ queryKey: getGetBotConfigQueryKey() });
         },
       }
@@ -135,18 +136,37 @@ export default function SettingsBot() {
                     <FormItem>
                       <FormLabel>Bot Token</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="1234567890:ABCdefGhIJKlmNoPQRstuVWXyz..." {...field} />
+                        <div className="relative">
+                          <Input 
+                            type={showToken ? "text" : "password"} 
+                            placeholder="1234567890:ABCdefGhIJKlmNoPQRstuVWXyz..." 
+                            className="pr-10"
+                            data-testid="input-bot-token"
+                            {...field} 
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowToken(v => !v)}
+                            data-testid="btn-toggle-token-visibility"
+                            tabIndex={-1}
+                          >
+                            {showToken ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                          </Button>
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <div className="flex gap-2">
-                  <Button type="submit" disabled={saveConfig.isPending} className="flex-1">
+                  <Button type="submit" disabled={saveConfig.isPending} className="flex-1" data-testid="btn-save-bot-config">
                     {saveConfig.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Lưu Token
+                    Lưu cấu hình
                   </Button>
-                  <Button type="button" variant="secondary" onClick={handleTestToken} disabled={testToken.isPending || !form.watch("botToken")}>
+                  <Button type="button" variant="secondary" onClick={handleTestToken} disabled={testToken.isPending || !form.watch("botToken")} data-testid="btn-test-token">
                     {testToken.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4" />}
                     Kiểm tra
                   </Button>
@@ -158,32 +178,42 @@ export default function SettingsBot() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Trạng thái kết nối</CardTitle>
+            <CardTitle>Trạng thái & Điều khiển</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-3 border border-border rounded-md bg-accent/30">
               <div className="space-y-1">
-                <p className="text-sm font-medium">Trạng thái</p>
+                <p className="text-sm font-medium">Trạng thái kết nối</p>
                 <div className="flex items-center gap-2">
-                  <div className={`h-2.5 w-2.5 rounded-full ${config?.isConnected ? 'bg-emerald-500' : 'bg-destructive'}`} />
+                  <div className={`h-2.5 w-2.5 rounded-full ${config?.isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-destructive'}`} />
                   <span className="text-sm text-muted-foreground">{config?.isConnected ? 'Đã kết nối' : 'Chưa kết nối'}</span>
                 </div>
               </div>
               {config?.botUsername && (
                 <div className="text-right">
-                  <p className="text-sm font-medium">Bot Username</p>
-                  <p className="text-sm text-primary">@{config.botUsername}</p>
+                  <p className="text-xs text-muted-foreground">Bot Username</p>
+                  <p className="text-sm text-primary font-medium">@{config.botUsername}</p>
                 </div>
               )}
             </div>
 
             <div className="flex items-center justify-between p-3 border border-border rounded-md bg-accent/30">
               <div className="space-y-1">
-                <p className="text-sm font-medium">Webhook</p>
-                <p className="text-sm text-muted-foreground max-w-[200px] truncate" title={config?.webhookUrl || ""}>
+                <p className="text-sm font-medium">Webhook URL</p>
+                <p className="text-xs text-muted-foreground max-w-[200px] truncate" title={config?.webhookUrl || ""}>
                   {config?.webhookUrl || "Chưa thiết lập"}
                 </p>
               </div>
+              <div className={`h-2 w-2 rounded-full ${config?.webhookUrl ? 'bg-emerald-500' : 'bg-muted'}`} />
+            </div>
+
+            <div className="p-3 border border-border rounded-md bg-accent/30 text-sm space-y-2">
+              <p className="font-medium text-muted-foreground">Hướng dẫn</p>
+              <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
+                <li>Nhập token từ @BotFather và lưu</li>
+                <li>Bấm "Kiểm tra" để xác thực token</li>
+                <li>Bấm "Bật Webhook" để nhận tin nhắn</li>
+              </ol>
             </div>
           </CardContent>
           <CardFooter className="flex gap-2">
@@ -191,6 +221,7 @@ export default function SettingsBot() {
               className="flex-1" 
               onClick={handleSetWebhook} 
               disabled={setWebhook.isPending || !config?.botToken}
+              data-testid="btn-set-webhook"
             >
               {setWebhook.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plug className="mr-2 h-4 w-4" />}
               Bật Webhook
@@ -200,6 +231,7 @@ export default function SettingsBot() {
               className="flex-1" 
               onClick={handleDisconnect} 
               disabled={disconnectBot.isPending || !config?.isConnected}
+              data-testid="btn-disconnect-bot"
             >
               {disconnectBot.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Unplug className="mr-2 h-4 w-4" />}
               Ngắt kết nối

@@ -33,12 +33,14 @@ export default function Products() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState<string>("all");
+  const [isActiveFilter, setIsActiveFilter] = useState<string>("all");
   
   const { data: productList, isLoading } = useListProducts({
     page,
     limit: 10,
     search: search || undefined,
     categoryId: categoryId !== "all" ? Number(categoryId) : undefined,
+    isActive: isActiveFilter !== "all" ? isActiveFilter === "true" : undefined,
   });
 
   const { data: categoryList } = useListCategories();
@@ -260,6 +262,16 @@ export default function Products() {
                 {cat.name}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={isActiveFilter} onValueChange={(v) => { setIsActiveFilter(v); setPage(1); }}>
+          <SelectTrigger className="w-[140px]" data-testid="select-product-status">
+            <SelectValue placeholder="Trạng thái" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả</SelectItem>
+            <SelectItem value="true">Đang bán</SelectItem>
+            <SelectItem value="false">Đã ẩn</SelectItem>
           </SelectContent>
         </Select>
       </div>

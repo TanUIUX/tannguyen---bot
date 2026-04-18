@@ -123,9 +123,10 @@ export default function BotLogs() {
                 <TableRow>
                   <TableHead className="w-[150px]">Thời gian</TableHead>
                   <TableHead className="w-[90px]">Cấp độ</TableHead>
-                  <TableHead className="w-[160px]">Hành động</TableHead>
+                  <TableHead className="w-[150px]">Hành động</TableHead>
                   <TableHead className="w-[100px]">Chat ID</TableHead>
                   <TableHead>Nội dung</TableHead>
+                  <TableHead className="w-[180px]">Metadata</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -145,12 +146,15 @@ export default function BotLogs() {
                     </TableCell>
                     <TableCell className="font-mono text-xs">{log.action}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{log.chatId || '-'}</TableCell>
-                    <TableCell className="text-sm font-mono max-w-[300px] truncate" title={log.content ?? undefined}>{log.content}</TableCell>
+                    <TableCell className="text-sm font-mono max-w-[200px] truncate" title={log.content ?? undefined}>{log.content}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground max-w-[180px] truncate" title={log.metadata ? JSON.stringify(log.metadata) : undefined}>
+                      {log.metadata ? JSON.stringify(log.metadata) : '—'}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {logs?.data?.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                       Không có nhật ký nào.
                     </TableCell>
                   </TableRow>

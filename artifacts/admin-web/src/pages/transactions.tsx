@@ -1,4 +1,4 @@
-import { useListTransactions } from "@workspace/api-client-react";
+import { useListTransactions, getListTransactionsQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { useState } from "react";
 import { formatVND, formatDate } from "@/lib/utils";
@@ -7,21 +7,29 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Transactions() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [type, setType] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
-  
-  const { data: transactionList, isLoading } = useListTransactions({
+  const queryClient = useQueryClient();
+
+  const queryParams = {
     page,
     limit: 10,
     search: search || undefined,
     type: type !== "all" ? type : undefined,
     status: status !== "all" ? status : undefined,
-  });
+  };
+
+  const { data: transactionList, isLoading, isFetching } = useListTransactions(queryParams);
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey(queryParams) });
+  };
 
   return (
     <div className="space-y-6">
@@ -30,17 +38,27 @@ export default function Transactions() {
           <h1 className="text-3xl font-bold tracking-tight">Giao dịch</h1>
           <p className="text-muted-foreground mt-1">Lịch sử thanh toán và nạp tiền.</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isFetching}
+          data-testid="btn-refresh-transactions"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
+          Làm mới
+        </Button>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <Input 
           placeholder="Tìm kiếm mã GD..." 
           className="max-w-xs" 
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           data-testid="input-search-transactions"
         />
-        <Select value={type} onValueChange={setType}>
+        <Select value={type} onValueChange={(v) => { setType(v); setPage(1); }}>
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="Loại giao dịch" />
           </SelectTrigger>
@@ -52,13 +70,14 @@ export default function Transactions() {
             <SelectItem value="manual_credit">Cộng thủ công</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={status} onValueChange={setStatus}>
+        <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="Trạng thái" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tất cả trạng thái</SelectItem>
             <SelectItem value="pending">Đang xử lý</SelectItem>
+            <SelectItem value="confirmed">Đã xác nhận</SelectItem>
             <SelectItem value="completed">Hoàn thành</SelectItem>
             <SelectItem value="failed">Thất bại</SelectItem>
           </SelectContent>
@@ -106,10 +125,11 @@ export default function Transactions() {
                     <TableCell>
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                         tx.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : 
+                        tx.status === 'confirmed' ? "bg-blue-500/10 text-blue-500" :
                         tx.status === 'pending' ? "bg-yellow-500/10 text-yellow-500" : 
                         "bg-destructive/10 text-destructive"
                       }`}>
-                        {tx.status === 'completed' ? "Hoàn thành" : tx.status === 'pending' ? "Đang xử lý" : "Thất bại"}
+                        {tx.status === 'completed' ? "Hoàn thành" : tx.status === 'confirmed' ? "Đã xác nhận" : tx.status === 'pending' ? "Đang xử lý" : "Thất bại"}
                       </span>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatDate(tx.createdAt)}</TableCell>
@@ -133,14 +153,16 @@ export default function Transactions() {
           variant="outline" 
           onClick={() => setPage(p => Math.max(1, p - 1))}
           disabled={page === 1}
+          data-testid="btn-prev-page"
         >
           Trang trước
         </Button>
-        <span className="text-sm text-muted-foreground">Trang {page}</span>
+        <span className="text-sm text-muted-foreground">Trang {page} {transactionList?.total ? `• ${transactionList.total} giao dịch` : ""}</span>
         <Button 
           variant="outline" 
           onClick={() => setPage(p => p + 1)}
           disabled={!transactionList || transactionList.data.length < 10}
+          data-testid="btn-next-page"
         >
           Trang sau
         </Button>
