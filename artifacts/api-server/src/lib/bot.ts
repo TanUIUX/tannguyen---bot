@@ -562,6 +562,26 @@ async function showProductDetail(chatId: number | string, productId: number, edi
   await renderView(chatId, editMessageId, msg, { reply_markup: { inline_keyboard: keyboard } });
 }
 
+// Look up the most recent promo code the customer successfully used within the
+// last 7 days, so we can offer a one-tap "Dùng lại" button instead of forcing
+// them to retype it. Only paid / delivered orders count — we don't want to
+// suggest a code that came from an abandoned cart.
+const RECENT_PROMO_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+async function findRecentPromotionForCustomer(customerId: number): Promise<{ id: number; code: string } | null> {
+  const since = new Date(Date.now() - RECENT_PROMO_WINDOW_MS);
+  const [row] = await db.select({
+    id: promotionsTable.id,
+    code: promotionsTable.code,
+  })
+    .from(ordersTable)
+    .innerJoin(promotionsTable, eq(promotionsTable.id, ordersTable.promotionId))
+    .where(sqlOp`${ordersTable.customerId} = ${customerId} AND ${ordersTable.promotionId} IS NOT NULL AND ${ordersTable.status} IN ('paid','delivered') AND ${ordersTable.createdAt} >= ${since}`)
+    .orderBy(desc(ordersTable.createdAt))
+    .limit(1);
+  if (!row || !row.code) return null;
+  return { id: row.id, code: row.code };
+}
+
 async function promptForPromoCode(chatId: number | string, customerId: number, productId: number, quantity: number, editMessageId?: number): Promise<void> {
   const { sql, count } = await import("drizzle-orm");
   const [product] = await db.select({
@@ -599,14 +619,25 @@ async function promptForPromoCode(chatId: number | string, customerId: number, p
   setAwaitingPromo(chatId, productId, quantity);
   await logBotAction("promo_prompt", String(chatId), customerId, `Promo prompt for ${product.name} x${quantity}`, { productId, quantity });
 
+  const recent = await findRecentPromotionForCustomer(customerId);
+
   const msg =
     `🛒 <b>${product.name}</b> x${quantity} — ${subtotalFormatted}đ\n\n` +
     `🎟️ <b>Nhập mã giảm giá (hoặc bỏ qua)</b>\n` +
-    `<i>Gõ mã giảm giá vào ô chat, hoặc bấm "Bỏ qua" để tiếp tục.</i>`;
+    `<i>Gõ mã giảm giá vào ô chat, hoặc bấm "Bỏ qua" để tiếp tục.</i>` +
+    (recent ? `\n\n<i>Lần trước bạn đã dùng mã <code>${recent.code}</code>.</i>` : "");
+
+  // Top row: "Dùng lại MÃXXX" (when available) alongside "Bỏ qua".
+  const topRow: Array<{ text: string; callback_data: string }> = [];
+  if (recent) {
+    topRow.push({ text: `🔁 Dùng lại ${recent.code}`, callback_data: `reuse_promo_${recent.id}_${productId}_${quantity}` });
+  }
+  topRow.push({ text: "⏭️ Bỏ qua", callback_data: `skip_promo_${productId}_${quantity}` });
+
   await renderView(chatId, editMessageId, msg, {
     reply_markup: {
       inline_keyboard: [
-        [{ text: "⏭️ Bỏ qua", callback_data: `skip_promo_${productId}_${quantity}` }],
+        topRow,
         [{ text: "⬅️ Quay lại", callback_data: `prod_${productId}` }, { text: "🏠 Trang chủ", callback_data: "main_menu" }],
       ],
     },
@@ -1315,6 +1346,43 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         clearAwaitingPromo(chatId);
         await logBotAction("promo_skipped", String(chatId), customer.id, `Skipped promo for product ${productId} x${quantity}`, { productId, quantity });
         await createOrderFromBot(chatId, customer.id, productId, quantity, null);
+      } else if (data.startsWith("reuse_promo_")) {
+        // One-tap reuse of the customer's most recently applied promo code.
+        // We re-validate against the current subtotal — the code may have
+        // expired, been disabled, or hit its usage limit since last time.
+        const parts = data.replace("reuse_promo_", "").split("_");
+        const promotionId = parseInt(parts[0], 10);
+        const productId = parseInt(parts[1], 10);
+        const quantity = parseInt(parts[2], 10);
+        clearAwaitingPromo(chatId);
+
+        const { sql, count } = await import("drizzle-orm");
+        const [product] = await db.select({ price: productsTable.price }).from(productsTable).where(eq(productsTable.id, productId));
+        const [stockRow] = await db.select({ c: count() }).from(productStocksTable).where(sql`${productStocksTable.productId} = ${productId} AND ${productStocksTable.status} = 'available'`);
+        const stockCount = Number(stockRow?.c ?? 0);
+        if (!product || stockCount < quantity) {
+          await sendMessage(chatId, "❌ Sản phẩm không còn đủ hàng. Vui lòng chọn lại.");
+        } else {
+          const [promo] = await db.select({ code: promotionsTable.code }).from(promotionsTable).where(eq(promotionsTable.id, promotionId));
+          const code = promo?.code ?? "";
+          const subtotal = parseFloat(product.price) * quantity;
+          const result = code ? await validatePromoCode(code, subtotal) : { error: "Mã giảm giá không tồn tại." };
+          if ("error" in result) {
+            await logBotAction("promo_reuse_invalid", String(chatId), customer.id, `Reuse failed for promo ${promotionId}: ${result.error}`, { promotionId, productId, quantity, error: result.error }, "warn");
+            await sendMessage(
+              chatId,
+              `❌ Mã <code>${code || "?"}</code> không còn dùng được: ${result.error}\n\n<i>Vui lòng nhập mã khác hoặc bấm "Bỏ qua".</i>`,
+            );
+            // Fall back to the manual prompt (re-arms awaiting state). Reuse
+            // the original menu slot so the customer keeps a single, up-to-date
+            // prompt instead of a stale one above the error message.
+            await promptForPromoCode(chatId, customer.id, productId, quantity, messageId);
+          } else {
+            await logBotAction("promo_reused", String(chatId), customer.id, `Reused promo ${result.code} (-${result.discountAmount})`, { code: result.code, promotionId: result.id, discountAmount: result.discountAmount, productId, quantity });
+            await sendMessage(chatId, `✅ Đã áp dụng lại mã <code>${result.code}</code> — giảm <b>${result.discountAmount.toLocaleString("vi-VN")}đ</b>`);
+            await createOrderFromBot(chatId, customer.id, productId, quantity, result);
+          }
+        }
       } else if (data.startsWith("pay_with_balance_")) {
         const orderId = parseInt(data.replace("pay_with_balance_", ""), 10);
         const { payWithBalance } = await import("./payments");
