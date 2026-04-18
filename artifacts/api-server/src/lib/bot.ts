@@ -307,7 +307,9 @@ async function createOrderFromBot(chatId: number | string, customerId: number, p
 
 export async function deliverOrder(orderId: number): Promise<boolean> {
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
-  if (!order || order.status !== "paid") return false;
+  if (!order || (order.status !== "paid" && order.status !== "needs_manual_action")) return false;
+
+  const isRetry = order.status === "needs_manual_action";
 
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, order.customerId));
   if (!customer) return false;
@@ -363,7 +365,11 @@ export async function deliverOrder(orderId: number): Promise<boolean> {
   availableStocks.forEach((s, i) => {
     deliveryMsg += `${i + 1}. <code>${s.content}</code>\n`;
   });
-  deliveryMsg += `\n✅ Cảm ơn bạn đã mua hàng!`;
+  if (isRetry) {
+    deliveryMsg += `\n✅ Cảm ơn bạn đã kiên nhẫn chờ đợi! Xin lỗi vì sự chậm trễ.`;
+  } else {
+    deliveryMsg += `\n✅ Cảm ơn bạn đã mua hàng!`;
+  }
 
   await sendMessage(parseInt(customer.chatId), deliveryMsg);
 
@@ -374,7 +380,8 @@ export async function deliverOrder(orderId: number): Promise<boolean> {
   const { sql } = await import("drizzle-orm");
   await db.update(customersTable).set({ totalSpent: sql`total_spent + ${parseFloat(order.totalAmount)}` }).where(eq(customersTable.id, customer.id));
 
-  await logBotAction("delivery_sent", customer.chatId, customer.id, `Delivered order ${order.orderCode}`, { orderId });
+  const deliveryAction = isRetry ? "retry_delivery_sent" : "delivery_sent";
+  await logBotAction(deliveryAction, customer.chatId, customer.id, `Delivered order ${order.orderCode}`, { orderId, isRetry });
   return true;
 }
 
