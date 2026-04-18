@@ -541,6 +541,7 @@ async function showWalletHistory(chatId: number | string, customer: typeof custo
     msg += `<i>Chưa có giao dịch ví nào.</i>\n\nDùng <code>/naptien [số tiền]</code> để nạp tiền vào ví.`;
   } else {
     msg += `<b>${txns.length} giao dịch gần nhất:</b>\n`;
+    let runningBalance = parseFloat(customer.balance);
     for (const t of txns) {
       const amount = parseFloat(t.amount);
       const amountFormatted = amount.toLocaleString("vi-VN");
@@ -555,7 +556,10 @@ async function showWalletHistory(chatId: number | string, customer: typeof custo
       const isTopup = t.type === "topup";
       const label = isTopup ? "⬆️ Nạp tiền" : "⬇️ Thanh toán";
       const sign = isTopup ? "+" : "−";
-      msg += `\n${label}\n   ${sign}${amountFormatted}đ • ${date}\n`;
+      const balanceAfter = runningBalance;
+      const balanceAfterFormatted = balanceAfter.toLocaleString("vi-VN");
+      msg += `\n${label}\n   ${sign}${amountFormatted}đ • ${date}\n   👛 Số dư sau: <b>${balanceAfterFormatted}đ</b>\n`;
+      runningBalance = isTopup ? runningBalance - amount : runningBalance + amount;
     }
   }
 
