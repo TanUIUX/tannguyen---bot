@@ -527,19 +527,24 @@ async function showProductDetail(chatId: number | string, productId: number, edi
 
   const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
   const minQ = product.minQuantity;
-  const maxAvailable = Math.min(product.maxQuantity, product.stockCount);
-  // Only show purchase actions when there is enough stock to satisfy the minimum quantity.
-  if (maxAvailable >= minQ) {
+  const maxQ = product.maxQuantity;
+  // Show purchase actions whenever there's at least enough stock for the
+  // minimum quantity. The "max" and custom-input options always reflect the
+  // configured maxQuantity (not the live stock) — a customer who tries to buy
+  // more than available will get a clear "not enough stock" error at order
+  // time. Clamping by stock here was confusing: the header showed "Số lượng:
+  // 1 - 3" but the keyboard only offered "1" when stock was 1.
+  if (product.stockCount >= minQ) {
     const row: Array<{ text: string; callback_data: string }> = [];
     // Option 1: minimum quantity (usually 1)
     row.push({ text: `${minQ}`, callback_data: `qty_${productId}_${minQ}` });
-    // Option 2: maximum available — only show if it's larger than the minimum
-    if (maxAvailable > minQ) {
-      row.push({ text: `Tối đa (${maxAvailable})`, callback_data: `qty_${productId}_${maxAvailable}` });
+    // Option 2: maximum allowed — only show if it's larger than the minimum
+    if (maxQ > minQ) {
+      row.push({ text: `Tối đa (${maxQ})`, callback_data: `qty_${productId}_${maxQ}` });
     }
     keyboard.push(row);
     // Option 3: let the user type a custom quantity — only when there's a real range to pick from
-    if (maxAvailable > minQ) {
+    if (maxQ > minQ) {
       keyboard.push([{ text: "✏️ Nhập số lượng", callback_data: `qty_input_${productId}` }]);
     }
   }
@@ -1098,17 +1103,17 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
           if (!product) {
             await sendMessage(chatId, "❌ Sản phẩm không còn tồn tại.");
           } else {
-            const [stockRow] = await db.select({ c: count() }).from(productStocksTable).where(sql`${productStocksTable.productId} = ${pending.productId} AND ${productStocksTable.status} = 'available'`);
-            const stockCount = Number(stockRow?.c ?? 0);
-            const maxAvailable = Math.min(product.maxQuantity, stockCount);
             const trimmed = text.trim();
             const qty = /^\d+$/.test(trimmed) ? parseInt(trimmed, 10) : NaN;
-            if (!Number.isFinite(qty) || qty < product.minQuantity || qty > maxAvailable) {
+            // Validate against the configured min/max only — actual stock is
+            // re-checked when the order is confirmed, which produces a clear
+            // "không còn đủ hàng" error if the pick exceeds available stock.
+            if (!Number.isFinite(qty) || qty < product.minQuantity || qty > product.maxQuantity) {
               // Re-arm so the customer can try again.
               setAwaitingQuantity(chatId, pending.productId);
               await sendMessage(
                 chatId,
-                `❌ Số lượng không hợp lệ. Vui lòng nhập một số từ <b>${product.minQuantity}</b> đến <b>${maxAvailable}</b>.`,
+                `❌ Số lượng không hợp lệ. Vui lòng nhập một số từ <b>${product.minQuantity}</b> đến <b>${product.maxQuantity}</b>.`,
                 { reply_markup: { inline_keyboard: [[{ text: "⬅️ Quay lại", callback_data: `prod_${pending.productId}` }]] } }
               );
             } else {
@@ -1211,22 +1216,26 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
             reply_markup: { inline_keyboard: [[{ text: "🏠 Trang chủ", callback_data: "main_menu" }]] },
           });
         } else {
+          // Gate only on having any stock at all — the user may type up to the
+          // configured maxQuantity. Stock is re-validated when they confirm the
+          // order, so an over-stock pick produces a clear error there.
           const [stockRow] = await db.select({ c: count() }).from(productStocksTable).where(sql`${productStocksTable.productId} = ${productId} AND ${productStocksTable.status} = 'available'`);
           const stockCount = Number(stockRow?.c ?? 0);
-          const maxAvailable = Math.min(product.maxQuantity, stockCount);
-          if (maxAvailable < product.minQuantity) {
+          if (stockCount < product.minQuantity) {
             await renderView(chatId, messageId, "❌ Sản phẩm đã hết hàng.", {
               reply_markup: { inline_keyboard: [[{ text: "⬅️ Quay lại", callback_data: `prod_${productId}` }]] },
             });
           } else {
             clearAwaitingPromo(chatId);
             setAwaitingQuantity(chatId, productId);
-            await logBotAction("quantity_prompt", String(chatId), customer.id, `Quantity prompt for product ${productId}`, { productId, minQuantity: product.minQuantity, maxAvailable });
+            await logBotAction("quantity_prompt", String(chatId), customer.id, `Quantity prompt for product ${productId}`, { productId, minQuantity: product.minQuantity, maxQuantity: product.maxQuantity, stockCount });
+            const stockHint = stockCount < product.maxQuantity ? `\n<i>Hiện còn ${stockCount} trong kho.</i>` : "";
             await renderView(
               chatId,
               messageId,
               `✏️ <b>Nhập số lượng muốn mua cho ${product.name}</b>\n` +
-              `<i>Gõ một số từ ${product.minQuantity} đến ${maxAvailable} vào ô chat.</i>`,
+              `<i>Gõ một số từ ${product.minQuantity} đến ${product.maxQuantity} vào ô chat.</i>` +
+              stockHint,
               { reply_markup: { inline_keyboard: [[{ text: "⬅️ Quay lại", callback_data: `prod_${productId}` }, { text: "🏠 Trang chủ", callback_data: "main_menu" }]] } }
             );
           }
