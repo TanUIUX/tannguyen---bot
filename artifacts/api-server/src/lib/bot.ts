@@ -980,16 +980,33 @@ async function showMyOrders(chatId: number | string, customerId: number, editMes
   });
 }
 
+// Preset amounts (in VND) shown as quick-pick buttons when the customer runs
+// /naptien with no argument. Each button emits `topup_amount_<n>` where n is
+// one of these values; the callback handler parses any positive integer, so
+// adding/removing entries here is safe.
+const TOPUP_PRESET_AMOUNTS = [50000, 100000, 200000, 500000, 1000000];
+
 async function handleTopup(chatId: number | string, customer: typeof customersTable.$inferSelect, text: string): Promise<void> {
   const parts = text.trim().split(/\s+/);
   const rawAmount = parts[1];
 
   if (!rawAmount) {
+    const keyboard = [
+      TOPUP_PRESET_AMOUNTS.slice(0, 3).map(n => ({
+        text: `${n.toLocaleString("vi-VN")}đ`,
+        callback_data: `topup_amount_${n}`,
+      })),
+      TOPUP_PRESET_AMOUNTS.slice(3).map(n => ({
+        text: `${n.toLocaleString("vi-VN")}đ`,
+        callback_data: `topup_amount_${n}`,
+      })),
+    ];
     await sendMessage(chatId,
       `💳 <b>Nạp tiền vào tài khoản</b>\n\n` +
-      `Sử dụng lệnh: <code>/naptien [số tiền]</code>\n` +
-      `Ví dụ: <code>/naptien 100000</code>\n\n` +
-      `👛 Số dư hiện tại: <b>${parseFloat(customer.balance).toLocaleString("vi-VN")}đ</b>`
+      `👛 Số dư hiện tại: <b>${parseFloat(customer.balance).toLocaleString("vi-VN")}đ</b>\n\n` +
+      `Chọn số tiền muốn nạp bên dưới hoặc gõ <code>/naptien [số tiền]</code> để nhập số tiền tuỳ chọn.\n` +
+      `Ví dụ: <code>/naptien 100000</code>`,
+      { reply_markup: { inline_keyboard: keyboard } }
     );
     return;
   }
@@ -1000,6 +1017,10 @@ async function handleTopup(chatId: number | string, customer: typeof customersTa
     return;
   }
 
+  await executeTopup(chatId, customer, amount);
+}
+
+async function executeTopup(chatId: number | string, customer: typeof customersTable.$inferSelect, amount: number): Promise<void> {
   if (amount < 10000) {
     await sendMessage(chatId, "❌ Số tiền nạp tối thiểu là <b>10.000đ</b>.");
     return;
@@ -1271,6 +1292,13 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
       } else if (data.startsWith("show_bank_transfer_")) {
         const orderId = parseInt(data.replace("show_bank_transfer_", ""), 10);
         await sendBankTransferForOrder(chatId, orderId, customer.id);
+      } else if (data.startsWith("topup_amount_")) {
+        const amount = parseInt(data.replace("topup_amount_", ""), 10);
+        if (isNaN(amount) || amount <= 0) {
+          await sendMessage(chatId, "❌ Số tiền không hợp lệ.");
+        } else {
+          await executeTopup(chatId, customer, amount);
+        }
       } else if (data === "wallet_history") {
         await showWalletHistory(chatId, customer, messageId);
       } else if (data === "my_orders") {
