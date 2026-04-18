@@ -1,30 +1,76 @@
-import { db, botLogsTable, customersTable, ordersTable, orderItemsTable, productStocksTable, transactionsTable, productsTable, promotionsTable } from "@workspace/db";
-import { eq, and, desc, inArray, sql as sqlOp } from "drizzle-orm";
+import { db, botLogsTable, customersTable, ordersTable, orderItemsTable, productStocksTable, transactionsTable, productsTable, promotionsTable, botPendingActionsTable } from "@workspace/db";
+import { eq, and, desc, inArray, sql as sqlOp, lt } from "drizzle-orm";
 import { logger } from "./logger";
 
-// In-memory conversation state for customers awaiting promo code entry.
-// Keyed by chatId. Cleared on skip, valid code entry, or when /start is sent.
+// Persistent conversation state for customers awaiting promo code entry.
+// Stored in `bot_pending_actions` so in-flight checkouts survive an API
+// server restart (deploys, crashes). Keyed by chatId. Cleared on skip, on
+// valid code entry, or when /start is sent. Expired entries are pruned by
+// the periodic sweep in pendingOrderExpiry.ts.
 interface AwaitingPromo {
   productId: number;
   quantity: number;
-  expiresAt: number;
 }
-const awaitingPromoCode = new Map<string, AwaitingPromo>();
 const PROMO_PROMPT_TTL_MS = 10 * 60 * 1000;
+const PROMO_ACTION = "awaiting_promo";
 
-function setAwaitingPromo(chatId: number | string, productId: number, quantity: number): void {
-  awaitingPromoCode.set(String(chatId), { productId, quantity, expiresAt: Date.now() + PROMO_PROMPT_TTL_MS });
-}
-function takeAwaitingPromo(chatId: number | string): AwaitingPromo | null {
+async function setAwaitingPromo(chatId: number | string, productId: number, quantity: number): Promise<void> {
   const key = String(chatId);
-  const entry = awaitingPromoCode.get(key);
-  if (!entry) return null;
-  awaitingPromoCode.delete(key);
-  if (entry.expiresAt < Date.now()) return null;
-  return entry;
+  const expiresAt = new Date(Date.now() + PROMO_PROMPT_TTL_MS);
+  const payload = { productId, quantity };
+  await db
+    .insert(botPendingActionsTable)
+    .values({ chatId: key, action: PROMO_ACTION, payload, expiresAt })
+    .onConflictDoUpdate({
+      target: [botPendingActionsTable.chatId, botPendingActionsTable.action],
+      set: { payload, expiresAt },
+    });
 }
-function clearAwaitingPromo(chatId: number | string): void {
-  awaitingPromoCode.delete(String(chatId));
+async function takeAwaitingPromo(chatId: number | string): Promise<AwaitingPromo | null> {
+  const key = String(chatId);
+  const [row] = await db
+    .delete(botPendingActionsTable)
+    .where(and(eq(botPendingActionsTable.chatId, key), eq(botPendingActionsTable.action, PROMO_ACTION)))
+    .returning({ payload: botPendingActionsTable.payload, expiresAt: botPendingActionsTable.expiresAt });
+  if (!row) return null;
+  if (new Date(row.expiresAt).getTime() < Date.now()) return null;
+  const p = row.payload as { productId?: unknown; quantity?: unknown };
+  if (typeof p.productId !== "number" || typeof p.quantity !== "number") return null;
+  return { productId: p.productId, quantity: p.quantity };
+}
+async function clearAwaitingPromo(chatId: number | string): Promise<void> {
+  const key = String(chatId);
+  await db
+    .delete(botPendingActionsTable)
+    .where(and(eq(botPendingActionsTable.chatId, key), eq(botPendingActionsTable.action, PROMO_ACTION)));
+}
+async function hasAwaitingPromo(chatId: number | string): Promise<boolean> {
+  // Match the original Map.has() semantics: any row, even an expired one
+  // that the sweep hasn't pruned yet, counts. takeAwaitingPromo() will then
+  // see the expired row, return null, and produce the explicit "phiên đã
+  // hết hạn" timeout message — preserving the prior UX.
+  const key = String(chatId);
+  const [row] = await db
+    .select({ id: botPendingActionsTable.id })
+    .from(botPendingActionsTable)
+    .where(and(
+      eq(botPendingActionsTable.chatId, key),
+      eq(botPendingActionsTable.action, PROMO_ACTION),
+    ))
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * Delete expired bot_pending_actions rows. Called from the periodic sweep so
+ * abandoned prompts (customer never replied) don't accumulate.
+ */
+export async function cleanupExpiredBotPendingActions(): Promise<number> {
+  const deleted = await db
+    .delete(botPendingActionsTable)
+    .where(lt(botPendingActionsTable.expiresAt, new Date()))
+    .returning({ id: botPendingActionsTable.id });
+  return deleted.length;
 }
 
 // In-memory state for customers asked to type a custom quantity.
@@ -616,7 +662,7 @@ async function promptForPromoCode(chatId: number | string, customerId: number, p
   const subtotal = parseFloat(product.price) * quantity;
   const subtotalFormatted = subtotal.toLocaleString("vi-VN");
 
-  setAwaitingPromo(chatId, productId, quantity);
+  await setAwaitingPromo(chatId, productId, quantity);
   await logBotAction("promo_prompt", String(chatId), customerId, `Promo prompt for ${product.name} x${quantity}`, { productId, quantity });
 
   const recent = await findRecentPromotionForCustomer(customerId);
@@ -1143,7 +1189,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
       await logBotAction("message", String(chatId), customer.id, text);
 
       if (text === "/start") {
-        clearAwaitingPromo(chatId);
+        await clearAwaitingPromo(chatId);
         clearAwaitingQuantity(chatId);
         await logBotAction("start", String(chatId), customer.id, "/start command");
         // Anchor message that installs the persistent reply keyboard, then the
@@ -1153,7 +1199,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
       } else if (REPLY_KEYBOARD_BUTTONS.has(text.trim())) {
         // A tap on the persistent reply keyboard. Always cancel any pending
         // quantity / promo prompt — the user is starting a new flow.
-        clearAwaitingPromo(chatId);
+        await clearAwaitingPromo(chatId);
         clearAwaitingQuantity(chatId);
         const btn = text.trim();
         await logBotAction("reply_keyboard", String(chatId), customer.id, btn);
@@ -1174,11 +1220,11 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
           await sendMessage(chatId, cfg.infoText && cfg.infoText.trim().length > 0 ? cfg.infoText : DEFAULT_INFO_TEXT);
         }
       } else if (text.startsWith("/naptien")) {
-        clearAwaitingPromo(chatId);
+        await clearAwaitingPromo(chatId);
         clearAwaitingQuantity(chatId);
         await handleTopup(chatId, customer, text);
       } else if (text === "/lichsu") {
-        clearAwaitingPromo(chatId);
+        await clearAwaitingPromo(chatId);
         clearAwaitingQuantity(chatId);
         await showWalletHistory(chatId, customer);
       } else if (awaitingQuantity.has(String(chatId)) && text.trim().length > 0) {
@@ -1215,9 +1261,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
             }
           }
         }
-      } else if (awaitingPromoCode.has(String(chatId)) && text.trim().length > 0) {
+      } else if ((await hasAwaitingPromo(chatId)) && text.trim().length > 0) {
         // Customer typed a promo code while in promo-prompt state.
-        const pending = takeAwaitingPromo(chatId);
+        const pending = await takeAwaitingPromo(chatId);
         if (!pending) {
           await sendMessage(chatId, "⏰ Phiên nhập mã đã hết hạn. Vui lòng đặt hàng lại.");
         } else {
@@ -1236,7 +1282,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
             if ("error" in result) {
               await logBotAction("promo_invalid", String(chatId), customer.id, `Invalid promo "${text}": ${result.error}`, { code: text, productId: pending.productId, quantity: pending.quantity }, "warn");
               // Re-arm the prompt so the user can try again or skip.
-              setAwaitingPromo(chatId, pending.productId, pending.quantity);
+              await setAwaitingPromo(chatId, pending.productId, pending.quantity);
               await sendMessage(chatId, `❌ ${result.error}\n\n<i>Hãy thử mã khác hoặc bấm "Bỏ qua".</i>`, {
                 reply_markup: {
                   inline_keyboard: [[{ text: "⏭️ Bỏ qua", callback_data: `skip_promo_${pending.productId}_${pending.quantity}` }]],
@@ -1319,7 +1365,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
               reply_markup: { inline_keyboard: [[{ text: "⬅️ Quay lại", callback_data: `prod_${productId}` }]] },
             });
           } else {
-            clearAwaitingPromo(chatId);
+            await clearAwaitingPromo(chatId);
             setAwaitingQuantity(chatId, productId);
             await logBotAction("quantity_prompt", String(chatId), customer.id, `Quantity prompt for product ${productId}`, { productId, minQuantity: product.minQuantity, maxQuantity: product.maxQuantity, stockCount });
             const stockHint = stockCount < product.maxQuantity ? `\n<i>Hiện còn ${stockCount} trong kho.</i>` : "";
@@ -1343,7 +1389,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         const parts = data.replace("skip_promo_", "").split("_");
         const productId = parseInt(parts[0], 10);
         const quantity = parseInt(parts[1], 10);
-        clearAwaitingPromo(chatId);
+        await clearAwaitingPromo(chatId);
         await logBotAction("promo_skipped", String(chatId), customer.id, `Skipped promo for product ${productId} x${quantity}`, { productId, quantity });
         await createOrderFromBot(chatId, customer.id, productId, quantity, null);
       } else if (data.startsWith("reuse_promo_")) {
@@ -1354,7 +1400,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         const promotionId = parseInt(parts[0], 10);
         const productId = parseInt(parts[1], 10);
         const quantity = parseInt(parts[2], 10);
-        clearAwaitingPromo(chatId);
+        await clearAwaitingPromo(chatId);
 
         const { sql, count } = await import("drizzle-orm");
         const [product] = await db.select({ price: productsTable.price }).from(productsTable).where(eq(productsTable.id, productId));

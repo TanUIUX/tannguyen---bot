@@ -1,7 +1,7 @@
 import { db, ordersTable, transactionsTable, customersTable, botLogsTable } from "@workspace/db";
 import { and, eq, lt } from "drizzle-orm";
 import { logger } from "./logger";
-import { sendMessageToCustomer } from "./bot";
+import { sendMessageToCustomer, cleanupExpiredBotPendingActions } from "./bot";
 
 const EXPIRY_MINUTES = Math.max(1, parseInt(process.env.PENDING_ORDER_EXPIRY_MINUTES ?? "15", 10) || 15);
 const SWEEP_INTERVAL_MS = 60 * 1000;
@@ -12,6 +12,18 @@ export async function expireStalePendingOrders(): Promise<{ expired: number }> {
   if (sweepRunning) return { expired: 0 };
   sweepRunning = true;
   try {
+    // Always prune expired bot pending actions, even when there are no stale
+    // orders to cancel — abandoned promo prompts must be cleaned up on every
+    // tick, not only on ticks that happen to find an expired order.
+    try {
+      const prunedActions = await cleanupExpiredBotPendingActions();
+      if (prunedActions > 0) {
+        logger.info({ pruned: prunedActions }, "Cleaned up expired bot pending actions");
+      }
+    } catch (cleanupErr) {
+      logger.warn({ cleanupErr }, "Failed to clean up expired bot pending actions");
+    }
+
     const cutoff = new Date(Date.now() - EXPIRY_MINUTES * 60 * 1000);
     const stale = await db
       .select({
@@ -70,6 +82,7 @@ export async function expireStalePendingOrders(): Promise<{ expired: number }> {
     if (expiredCount > 0) {
       logger.info({ expired: expiredCount, expiryMinutes: EXPIRY_MINUTES }, "Pending order expiry sweep completed");
     }
+
     return { expired: expiredCount };
   } catch (err) {
     logger.error({ err }, "Pending order expiry sweep failed");
