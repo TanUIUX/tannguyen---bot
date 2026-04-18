@@ -65,11 +65,17 @@ router.post("/bot/config", requireAuth, validateBody(SaveBotConfigBody), async (
       updateData.webhookSecretToken = null;
     }
     if (adminChatId !== undefined) updateData.adminChatId = adminChatId;
-    const [c] = await db.update(botConfigsTable)
-      .set(updateData)
-      .where(eq(botConfigsTable.id, existing.id))
-      .returning();
-    config = c;
+
+    if (Object.keys(updateData).length === 0) {
+      // Nothing to change — return existing config without a DB write
+      config = existing;
+    } else {
+      const [c] = await db.update(botConfigsTable)
+        .set(updateData)
+        .where(eq(botConfigsTable.id, existing.id))
+        .returning();
+      config = c;
+    }
   } else {
     const [c] = await db.insert(botConfigsTable)
       .values({ botToken: isMaskedToken ? null : botToken, isConnected: false, webhookStatus: "not_set", adminChatId: adminChatId ?? null })
