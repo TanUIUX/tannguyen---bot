@@ -1100,6 +1100,12 @@ export const GetPaymentConfigResponse = zod.object({
   accountHolder: zod.string().nullish(),
   webhookSecret: zod.string().nullish(),
   apiKey: zod.string().nullish(),
+  webhookUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Public URL admins should configure in SePay's webhook settings. Computed from REPLIT_DOMAINS at request time.",
+    ),
   isActive: zod.boolean(),
   updatedAt: zod.coerce.date().nullish(),
 });
@@ -1126,6 +1132,12 @@ export const SavePaymentConfigResponse = zod.object({
   accountHolder: zod.string().nullish(),
   webhookSecret: zod.string().nullish(),
   apiKey: zod.string().nullish(),
+  webhookUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Public URL admins should configure in SePay's webhook settings. Computed from REPLIT_DOMAINS at request time.",
+    ),
   isActive: zod.boolean(),
   updatedAt: zod.coerce.date().nullish(),
 });

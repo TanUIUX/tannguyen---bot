@@ -3,7 +3,8 @@ import { useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, CreditCard } from "lucide-react";
+import { Loader2, CreditCard, Copy, Check, Webhook } from "lucide-react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -27,6 +28,7 @@ type PaymentFormValues = z.infer<typeof paymentSchema>;
 export default function SettingsPayments() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
   
   const { data: config, isLoading } = useGetPaymentConfig({
     query: { queryKey: getGetPaymentConfigQueryKey() }
@@ -93,12 +95,69 @@ export default function SettingsPayments() {
     );
   }
 
+  const webhookUrl = config?.webhookUrl ?? null;
+  const handleCopyWebhook = async () => {
+    if (!webhookUrl) return;
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      setCopied(true);
+      toast({ title: "Đã sao chép URL webhook" });
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast({ title: "Không thể sao chép", description: "Vui lòng chọn và sao chép thủ công.", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Cấu hình Thanh toán</h1>
         <p className="text-muted-foreground mt-1">Cài đặt API SePay để nhận thanh toán tự động.</p>
       </div>
+
+      <Card className="max-w-2xl" data-testid="card-sepay-webhook">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Webhook className="h-5 w-5 text-primary" />
+            Webhook URL cho SePay
+          </CardTitle>
+          <CardDescription>
+            Sao chép URL bên dưới và dán vào mục <b>Cấu hình Webhook</b> trên trang quản trị SePay.
+            Khi có giao dịch chuyển khoản đến, SePay sẽ gọi URL này để hệ thống tự động xác nhận đơn hàng.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {webhookUrl ? (
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={webhookUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="font-mono text-sm"
+                data-testid="input-webhook-url"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleCopyWebhook}
+                data-testid="button-copy-webhook"
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span className="ml-2 hidden sm:inline">{copied ? "Đã copy" : "Sao chép"}</span>
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground" data-testid="text-no-webhook-url">
+              Chưa xác định được domain công khai. Hãy publish app để có URL webhook.
+            </p>
+          )}
+          <div className="rounded-md border border-border bg-accent/30 p-3 text-xs text-muted-foreground space-y-1">
+            <p><b>Phương thức:</b> POST</p>
+            <p><b>Xác thực:</b> Header <code className="bg-muted px-1 rounded">Authorization: Apikey &lt;SePay API Key&gt;</code></p>
+            <p><b>Nội dung CK cần khớp:</b> mã đơn hàng dạng <code className="bg-muted px-1 rounded">DH********</code> (10 ký tự)</p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="max-w-2xl">
         <CardHeader>

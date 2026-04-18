@@ -2295,6 +2295,10 @@ components:
         apiKey:
           type: string
           nullable: true
+        webhookUrl:
+          type: string
+          nullable: true
+          description: Public URL admins should configure in SePay's webhook settings. Computed from REPLIT_DOMAINS at request time.
         isActive:
           type: boolean
         updatedAt:

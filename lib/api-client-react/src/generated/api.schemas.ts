@@ -481,6 +481,8 @@ export interface PaymentConfig {
   accountHolder?: string | null;
   webhookSecret?: string | null;
   apiKey?: string | null;
+  /** Public URL admins should configure in SePay's webhook settings. Computed from REPLIT_DOMAINS at request time. */
+  webhookUrl?: string | null;
   isActive: boolean;
   updatedAt?: string | null;
 }

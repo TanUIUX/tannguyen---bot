@@ -47,10 +47,20 @@ async function verifySepaySignature(req: Request): Promise<boolean> {
   return providedKey === config.apiKey;
 }
 
+// Compute the public URL admins should paste into SePay's webhook settings.
+// Falls back to null when REPLIT_DOMAINS isn't set (e.g., local dev outside
+// Replit) so the UI can show a helpful message instead of a broken URL.
+function getSepayWebhookUrl(): string | null {
+  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
+  if (!domain) return null;
+  return `https://${domain}/api/payments/sepay/webhook`;
+}
+
 router.get("/payments/config", requireAuth, async (_req, res): Promise<void> => {
+  const webhookUrl = getSepayWebhookUrl();
   const config = await getConfig();
   if (!config) {
-    res.json({ provider: "sepay", isActive: false });
+    res.json({ provider: "sepay", isActive: false, webhookUrl });
     return;
   }
   res.json({
@@ -62,6 +72,7 @@ router.get("/payments/config", requireAuth, async (_req, res): Promise<void> => 
     accountHolder: config.accountHolder,
     webhookSecret: maskSecret(config.webhookSecret),
     apiKey: maskSecret(config.apiKey),
+    webhookUrl,
     isActive: config.isActive,
     updatedAt: config.updatedAt,
   });
