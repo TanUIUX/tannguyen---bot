@@ -1,4 +1,4 @@
-import { db, ordersTable, transactionsTable, paymentConfigsTable, customersTable } from "@workspace/db";
+import { db, ordersTable, transactionsTable, paymentConfigsTable, customersTable, orderItemsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -93,18 +93,39 @@ export async function handleSepayWebhook(payload: Record<string, unknown>): Prom
       rawPayload: JSON.stringify(payload),
     }).where(eq(transactionsTable.id, transaction.id));
 
-    // Alert admin about the payment mismatch
+    // Alert admin about the payment mismatch with full context
     const [failedOrder] = transaction.orderId
       ? await db.select().from(ordersTable).where(eq(ordersTable.id, transaction.orderId))
       : [null];
+
+    let customerLine = "";
+    let productLine = "";
+    if (failedOrder) {
+      const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, failedOrder.customerId));
+      if (customer) {
+        const displayName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.username || `ID:${customer.id}`;
+        customerLine = `👤 Khách hàng: ${displayName}${customer.username ? ` (@${customer.username})` : ""}\n`;
+      }
+      const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, failedOrder.id));
+      if (items.length > 0) {
+        productLine = `🛍️ Sản phẩm: ${items.map(i => `${i.productName} x${i.quantity}`).join(", ")}\n`;
+      }
+    }
+
+    const adminBaseUrl = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "";
+    const orderLink = failedOrder && adminBaseUrl ? `\n🔗 <a href="${adminBaseUrl}/orders/${failedOrder.id}">Xem đơn hàng trong Admin Panel</a>` : "";
+
     const adminMsg =
       `💸 <b>Thanh toán sai số tiền</b>\n\n` +
       `📦 Mã giao dịch: <code>${reference}</code>\n` +
       `${failedOrder ? `🛒 Đơn hàng: <code>${failedOrder.orderCode}</code>\n` : ""}` +
+      customerLine +
+      productLine +
       `💰 Số tiền nhận: <b>${receivedAmount.toLocaleString("vi-VN")}đ</b>\n` +
       `✅ Số tiền cần: <b>${expectedAmount.toLocaleString("vi-VN")}đ</b>\n` +
       `📊 Chênh lệch: ${(receivedAmount - expectedAmount).toLocaleString("vi-VN")}đ\n\n` +
-      `Cần xử lý thủ công giao dịch này.`;
+      `Cần xử lý thủ công giao dịch này.` +
+      orderLink;
     try {
       const { sendAdminAlert } = await import("./bot");
       await sendAdminAlert(adminMsg, { reference, receivedAmount, expectedAmount, orderId: transaction.orderId });

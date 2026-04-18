@@ -306,6 +306,8 @@ export async function deliverOrder(orderId: number): Promise<boolean> {
 
     // Alert admin about the out-of-stock situation
     const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.username || `ID:${customer.id}`;
+    const adminBaseUrl = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "";
+    const orderLink = adminBaseUrl ? `\n🔗 <a href="${adminBaseUrl}/orders/${orderId}">Xem đơn hàng trong Admin Panel</a>` : "";
     const adminMsg =
       `❌ <b>Giao hàng thất bại — hết hàng</b>\n\n` +
       `📦 Đơn hàng: <code>${order.orderCode}</code>\n` +
@@ -313,7 +315,8 @@ export async function deliverOrder(orderId: number): Promise<boolean> {
       `🛍️ Sản phẩm: ${item.productName} x${item.quantity}\n` +
       `💰 Số tiền: ${parseFloat(order.totalAmount).toLocaleString("vi-VN")}đ\n` +
       `📊 Tồn kho còn: ${availableStocks.length} / cần ${item.quantity}\n\n` +
-      `Cần nhập thêm hàng và xử lý thủ công đơn này.`;
+      `Cần nhập thêm hàng và xử lý thủ công đơn này.` +
+      orderLink;
     await sendAdminAlert(adminMsg, { orderId, productId: item.productId, productName: item.productName, available: availableStocks.length, required: item.quantity });
 
     return false;
