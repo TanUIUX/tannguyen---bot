@@ -12,3 +12,5 @@ export * from "./payment_configs";
 export * from "./bot_logs";
 export * from "./system_settings";
 export * from "./bot_pending_actions";
+export * from "./sunsama_users";
+export * from "./sunsama_tasks";
