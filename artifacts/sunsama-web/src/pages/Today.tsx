@@ -1,0 +1,255 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { taskApi, type UpdateTaskInput } from "../api/tasks";
+import { DailyTimeSummary } from "../components/DailyTimeSummary";
+import { useState } from "react";
+import type { Task } from "../types/task";
+import { EditTaskModal } from "../components/EditTaskModal";
+import { Timeline } from "../components/Timeline";
+import { DndContext, type DragEndEvent, useDroppable } from "@dnd-kit/core";
+import { DraggableTaskItem } from "../components/DraggableTaskItem";
+import { PomodoroTimer } from "../components/PomodoroTimer";
+import { useTimerStore } from "../store/timerStore";
+
+export function Today() {
+  const { activeTask, timeLeft, isRunning, setActiveTask, stopAndClear } =
+    useTimerStore();
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [showTimerModal, setShowTimerModal] = useState(false);
+
+  const queryClient = useQueryClient();
+
+  const {
+    data: tasks,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["tasks"],
+    queryFn: taskApi.getTasks,
+  });
+
+  const isToday = (dateString: string | null) => {
+    if (!dateString) return false;
+    const taskDate = dateString.split("T")[0];
+
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    const todayDate = `${year}-${month}-${day}`;
+
+    return taskDate === todayDate;
+  };
+
+  const planMutation = useMutation({
+    mutationFn: ({
+      id,
+      plannedDate,
+    }: {
+      id: string;
+      plannedDate: string | null;
+    }) => taskApi.planTask(id, plannedDate),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: taskApi.toggleTask,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: taskApi.deleteTask,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateTaskInput }) =>
+      taskApi.updateTask(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      setEditingTask(null);
+    },
+  });
+
+  const handleRemoveFromToday = (id: string) => {
+    planMutation.mutate({ id, plannedDate: null });
+  };
+
+  const handleToggleTask = (id: string) => {
+    toggleMutation.mutate(id);
+  };
+
+  const handleDeleteTask = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this task?")) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const handleEdit = (task: Task) => {
+    setEditingTask(task);
+  };
+
+  const handleSaveEdit = (id: string, data: UpdateTaskInput) => {
+    updateMutation.mutate({ id, data });
+  };
+
+  const handleUpdateStartTime = (id: string, startTime: string) => {
+    updateMutation.mutate({ id, data: { startTime } });
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const taskId = active.id.toString();
+    const timeSlot = over.data?.current?.timeSlot;
+
+    handleUpdateStartTime(taskId, timeSlot);
+  };
+
+  const handleStartTimer = (task: Task) => {
+    setActiveTask(task);
+    setShowTimerModal(true);
+  };
+
+  const handleTimerComplete = (taskId: string, minutesSpent: number) => {
+    const currentTask = tasks?.find((t) => t.id === taskId);
+    updateMutation.mutate(
+      {
+        id: taskId,
+        data: { actualTime: (currentTask?.actualTime || 0) + minutesSpent },
+      },
+      {
+        onSuccess: () => {
+          stopAndClear();
+          setShowTimerModal(false);
+        },
+        onError: () => {
+          setShowTimerModal(false);
+        },
+      }
+    );
+    setShowTimerModal(false);
+  };
+
+  const todayTasks = tasks?.filter((task) => isToday(task.plannedDate));
+
+  function UnscheduledDropZone({ children }: { children: React.ReactNode }) {
+    const { setNodeRef, isOver } = useDroppable({
+      id: "unscheduled",
+      data: { timeSlot: null },
+    });
+
+    return (
+      <div
+        ref={setNodeRef}
+        className={`space-y-3 min-h-32 p-4 rounded-lg transition-colors ${
+          isOver ? "bg-gray-100 border-2 border-gray-400 border-dashed" : ""
+        }`}
+      >
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <DndContext onDragEnd={handleDragEnd}>
+      <div className="min-h-screen bg-gray-50 py-8 px-4">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-4xl font-bold text-gray-900 mb-8">Today</h1>
+          <p className="text-gray-600 mb-8">
+            {todayTasks?.length || 0} tasks planned
+          </p>
+          {todayTasks && todayTasks.length > 0 && (
+            <DailyTimeSummary tasks={todayTasks} />
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h2 className="text-xl font-semibold mb-4">
+                Unscheduled Tasks
+              </h2>
+              {isLoading && (
+                <p className="text-gray-500">Loading tasks...</p>
+              )}
+              {error && (
+                <p className="text-red-500">Failed to load tasks</p>
+              )}
+
+              <UnscheduledDropZone>
+                {todayTasks
+                  ?.filter((task) => !task.startTime)
+                  ?.map((task) => (
+                    <DraggableTaskItem
+                      key={task.id}
+                      task={task}
+                      onToggle={handleToggleTask}
+                      onRemoveFromToday={handleRemoveFromToday}
+                      onDelete={handleDeleteTask}
+                      onEdit={handleEdit}
+                    />
+                  ))}
+
+                {todayTasks?.filter((t) => !t.startTime).length === 0 && (
+                  <p className="text-gray-500 text-sm">
+                    All tasks scheduled!
+                  </p>
+                )}
+              </UnscheduledDropZone>
+            </div>
+
+            <div>
+              <Timeline
+                tasks={todayTasks || []}
+                onStartTimer={handleStartTimer}
+              />
+            </div>
+          </div>
+          {activeTask && !showTimerModal && (
+            <button
+              onClick={() => setShowTimerModal(true)}
+              className={`fixed bottom-8 right-8 text-white rounded-full p-4 shadow-lg transition-all hover:scale-110 z-40 ${
+                isRunning
+                  ? "bg-red-500 hover:bg-red-600 animate-pulse"
+                  : "bg-orange-500 hover:bg-orange-600"
+              }`}
+              title={
+                isRunning
+                  ? "Timer running - click to view"
+                  : "Timer paused - click to view"
+              }
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">P</span>
+                <div className="text-sm font-mono font-bold">
+                  {Math.floor(timeLeft / 60)}:
+                  {(timeLeft % 60).toString().padStart(2, "0")}
+                </div>
+              </div>
+            </button>
+          )}
+          {editingTask && (
+            <EditTaskModal
+              task={editingTask}
+              isOpen={true}
+              onClose={() => setEditingTask(null)}
+              onSave={handleSaveEdit}
+              isLoading={updateMutation.isPending}
+            />
+          )}
+          {activeTask && showTimerModal && (
+            <PomodoroTimer
+              onClose={() => setShowTimerModal(false)}
+              onComplete={handleTimerComplete}
+            />
+          )}
+        </div>
+      </div>
+    </DndContext>
+  );
+}
