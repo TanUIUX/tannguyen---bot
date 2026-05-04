@@ -1,0 +1,54 @@
+{
+  "name": "@workspace/sunsama-api",
+  "version": "0.14.0",
+  "description": "TypeScript wrapper for the Sunsama API - Daily planning and task management",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors/index.d.ts",
+      "default": "./dist/errors/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/types/index.js"
+    },
+    "./queries": {
+      "types": "./dist/queries/index.d.ts",
+      "default": "./dist/queries/index.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "default": "./dist/utils/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist/ *.tsbuildinfo"
+  },
+  "dependencies": {
+    "graphql": "^16.11.0",
+    "graphql-tag": "^2.12.6",
+    "marked": "^14.1.3",
+    "tough-cookie": "^5.1.2",
+    "tslib": "^2.8.1",
+    "turndown": "^7.2.0",
+    "yjs": "^13.6.27",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/tough-cookie": "^4.0.5",
+    "@types/turndown": "^5.0.5"
+  }
+}
