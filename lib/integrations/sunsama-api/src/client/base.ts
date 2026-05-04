@@ -298,7 +298,7 @@ export abstract class SunsamaClientBase {
     return timestampHex + randomValue + counterHex;
   }
 
-  private static _counter = Math.floor(Math.random() * 0xffffff);
+  private static _counter = Math.floor(Math.random() * 0x1000000);
 
   /**
    * Gets a random value for ObjectId generation (5 bytes = 10 hex chars)
@@ -327,7 +327,7 @@ export abstract class SunsamaClientBase {
    * @internal
    */
   private static getNextCounter(): number {
-    SunsamaClientBase._counter = (SunsamaClientBase._counter + 1) % 0xffffff;
+    SunsamaClientBase._counter = (SunsamaClientBase._counter + 1) % 0x1000000;
     return SunsamaClientBase._counter;
   }
 }

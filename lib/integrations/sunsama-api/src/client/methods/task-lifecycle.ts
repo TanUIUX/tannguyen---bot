@@ -330,7 +330,7 @@ export abstract class TaskLifecycleMethods extends UserMethods {
       sequence: null,
       followers: [],
       recommendedTimeEstimate: null,
-      timeEstimate: options?.timeEstimate || null,
+      timeEstimate: options?.timeEstimate ?? null,
       actualTime: [],
       scheduledTime: [],
       createdAt: now,
