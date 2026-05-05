@@ -2,17 +2,20 @@ import "./homepage.css";
 import ProgressBar from "./ProgressBar";
 import type { Project, Subtask } from "./types";
 import SubtaskItem from "./SubtaskItem";
+import { MessageSquare, Clock, Archive } from "lucide-react";
 
 interface Props {
   project: Project;
   pendingToggles: Record<string, boolean>;
   onToggleSubtask: (projectId: string, subtaskTitle: string) => void;
+  onArchiveTask: (projectId: string) => void;
 }
 
 export default function TaskCard({
   project,
   pendingToggles,
   onToggleSubtask,
+  onArchiveTask,
 }: Props) {
   const total = project.subtasks?.length || 0;
   const done =
@@ -24,7 +27,10 @@ export default function TaskCard({
       <div className="task-project">
         <div className="task-header">
           <div className="task-name">{project.title}</div>
-          <div className="time-badge">{project.plannedTime ?? 0}m</div>
+          <div className="time-badge">
+            {Math.floor((project.plannedTime ?? 0) / 60)}:
+            {String((project.plannedTime ?? 0) % 60).padStart(2, "0")}
+          </div>
         </div>
         <ProgressBar progress={progress} />
         <div className="task-middlesection">
@@ -44,43 +50,15 @@ export default function TaskCard({
         </div>
         <div className="task-footer">
           <div className="footer-icons">
-            <svg
-              className="footer-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden
+            <MessageSquare size={18} className="footer-icon" />
+            <Clock size={18} className="footer-icon" />
+            <button
+              className="footer-archive-btn"
+              onClick={() => onArchiveTask(project._id)}
+              aria-label="Archive task"
             >
-              <path
-                d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <svg
-              className="footer-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden
-            >
-              <path
-                d="M12 8v5l3 2"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+              <Archive size={16} />
+            </button>
           </div>
           <div className="tag">{project.tag ?? "# work"}</div>
         </div>

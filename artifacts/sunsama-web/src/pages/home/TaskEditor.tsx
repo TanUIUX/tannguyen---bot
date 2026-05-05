@@ -1,18 +1,14 @@
 import "./homepage.css";
 import type { Dispatch, SetStateAction } from "react";
-import {
-  format,
-  isToday,
-  isTomorrow,
-  isYesterday,
-} from "date-fns";
+import { format, isToday, isTomorrow, isYesterday } from "date-fns";
 import CalendarSelect from "./CalendarSelect";
-import { Clock } from "lucide-react";
+import { Clock, Hash, Settings, ArrowUp } from "lucide-react";
 
 interface EditorState {
   open: boolean;
   dayId?: string;
   title?: string;
+  description?: string;
   tag?: string;
   timeEstimate?: number;
 }
@@ -69,6 +65,15 @@ export default function TaskEditor({
           }}
         />
 
+        <textarea
+          className="editor-textarea"
+          placeholder="Task description..."
+          value={editor.description ?? ""}
+          onChange={(e) =>
+            setEditor((s) => ({ ...s, description: e.target.value }))
+          }
+        />
+
         <div className="editor-footer">
           <div className="editor-left">
             <label className="editor-label">
@@ -91,14 +96,17 @@ export default function TaskEditor({
                   }))
                 }
               >
-                <option value={15}>15</option>
-                <option value={30}>30</option>
-                <option value={45}>45</option>
-                <option value={60}>60</option>
+                <option value={15}>--:--</option>
+                <option value={15}>0:15</option>
+                <option value={30}>0:30</option>
+                <option value={45}>0:45</option>
+                <option value={60}>1:00</option>
+                <option value={90}>1:30</option>
+                <option value={120}>2:00</option>
               </select>
             </label>
             <label className="editor-label">
-              Tag
+              <Hash size={16} />
               <select
                 className="editor-select"
                 value={editor.tag ?? "# work"}
@@ -106,11 +114,24 @@ export default function TaskEditor({
                   setEditor((s) => ({ ...s, tag: e.target.value }))
                 }
               >
+                <option value="# work">channel</option>
                 <option value="# work"># work</option>
                 <option value="# personal"># personal</option>
                 <option value="# errands"># errands</option>
               </select>
             </label>
+          </div>
+          <div className="editor-right">
+            <button className="editor-icon-btn" aria-label="Settings">
+              <Settings size={16} />
+            </button>
+            <button
+              className="editor-icon-btn"
+              aria-label="Submit"
+              onClick={saveEditor}
+            >
+              <ArrowUp size={16} />
+            </button>
           </div>
         </div>
       </div>

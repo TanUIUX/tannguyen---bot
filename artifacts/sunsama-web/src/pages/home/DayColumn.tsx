@@ -8,6 +8,7 @@ interface Props {
   openEditor: (dayId: string) => void;
   pendingToggles: Record<string, boolean>;
   onToggleSubtask: (projectId: string, subtaskTitle: string) => void;
+  onArchiveTask: (projectId: string) => void;
 }
 
 export default function DayColumn({
@@ -16,6 +17,7 @@ export default function DayColumn({
   openEditor,
   pendingToggles,
   onToggleSubtask,
+  onArchiveTask,
 }: Props) {
   return (
     <div className="day-col">
@@ -32,6 +34,7 @@ export default function DayColumn({
           project={p}
           pendingToggles={pendingToggles}
           onToggleSubtask={onToggleSubtask}
+          onArchiveTask={onArchiveTask}
         />
       ))}
     </div>

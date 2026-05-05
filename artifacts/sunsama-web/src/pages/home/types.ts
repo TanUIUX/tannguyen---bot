@@ -10,6 +10,7 @@ export interface Project {
   plannedTime: number;
   subtasks: Subtask[];
   tag?: string;
+  archived?: boolean;
 }
 
 export interface DayItem {

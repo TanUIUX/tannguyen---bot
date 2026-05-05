@@ -8,6 +8,7 @@ import BoardHeader from "./BoardHeader";
 import DayColumn from "./DayColumn";
 import TaskEditor from "./TaskEditor";
 import CalendarPane from "./CalendarPane";
+import BacklogPanel from "./BacklogPanel";
 
 export function HomePage() {
   const days = useMemo(() => generateDays(), []);
@@ -24,12 +25,22 @@ export function HomePage() {
     open: boolean;
     dayId?: string;
     title?: string;
+    description?: string;
     tag?: string;
     timeEstimate?: number;
   }>({ open: false });
 
+  const [showBacklog, setShowBacklog] = useState(false);
+
   function openEditor(dayId: string) {
-    setEditor({ open: true, dayId, title: "", tag: "# work", timeEstimate: 30 });
+    setEditor({
+      open: true,
+      dayId,
+      title: "",
+      description: "",
+      tag: "# work",
+      timeEstimate: 30,
+    });
   }
 
   function closeEditor() {
@@ -95,6 +106,25 @@ export function HomePage() {
     }, 300);
   }
 
+  function handleArchiveTask(projectId: string) {
+    setLocalProjects((prev) =>
+      prev.map((p) =>
+        p._id === projectId ? { ...p, archived: true } : p,
+      ),
+    );
+  }
+
+  function handleRestoreTask(projectId: string) {
+    setLocalProjects((prev) =>
+      prev.map((p) =>
+        p._id === projectId ? { ...p, archived: false } : p,
+      ),
+    );
+  }
+
+  const activeProjects = localProjects.filter((p) => !p.archived);
+  const archivedProjects = localProjects.filter((p) => p.archived);
+
   return (
     <div className="app">
       <Sidebar />
@@ -107,10 +137,11 @@ export function HomePage() {
             <DayColumn
               key={day.id}
               day={day}
-              projects={localProjects.filter((p) => p.date === day.id)}
+              projects={activeProjects.filter((p) => p.date === day.id)}
               openEditor={openEditor}
               pendingToggles={pendingToggles}
               onToggleSubtask={handleToggleSubtask}
+              onArchiveTask={handleArchiveTask}
             />
           ))}
         </section>
@@ -125,7 +156,15 @@ export function HomePage() {
         )}
       </main>
 
-      <CalendarPane />
+      {showBacklog ? (
+        <BacklogPanel
+          archivedProjects={archivedProjects}
+          onRestore={handleRestoreTask}
+          onClose={() => setShowBacklog(false)}
+        />
+      ) : (
+        <CalendarPane onOpenBacklog={() => setShowBacklog(true)} />
+      )}
     </div>
   );
 }
